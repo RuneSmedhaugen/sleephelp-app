@@ -1,0 +1,22 @@
+[
+  {
+    "file": "birds.mp3",
+    "name": "Birds",
+    "icon": "🐦"
+  },
+  {
+    "file": "fire.mp3",
+    "name": "Fire",
+    "icon": "🔥"
+  },
+  {
+    "file": "ocean.mp3",
+    "name": "Ocean",
+    "icon": "🌊"
+  },
+  {
+    "file": "water.mp3",
+    "name": "Water",
+    "icon": "💧"
+  }
+]
