@@ -1,8 +1,9 @@
 import 'dart:convert';
 
-import 'package:audioplayers/audioplayers.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+
+import '../main.dart';
 
 class PlayerScreen extends StatefulWidget {
   const PlayerScreen({super.key});
@@ -12,17 +13,14 @@ class PlayerScreen extends StatefulWidget {
 }
 
 class _PlayerScreenState extends State<PlayerScreen> {
-  // All sounds loaded from sounds.json
+  // All sounds loaded from sounds.json.
   List<Map<String, dynamic>> _sounds = [];
 
-  // Active AudioPlayers, one for each selected sound
-  final Map<String, AudioPlayer> _players = {};
-
-  // Volume for each sound
-  final Map<String, double> _volumes = {};
-
-  // Whether each sound has been added
+  // Which sounds have been added to the mixer.
   final Set<String> _selectedSounds = {};
+
+  // Volume for each sound.
+  final Map<String, double> _volumes = {};
 
   bool _isPlaying = false;
   bool _isLoading = true;
@@ -45,9 +43,9 @@ class _PlayerScreenState extends State<PlayerScreen> {
             .map((sound) => Map<String, dynamic>.from(sound))
             .toList();
 
-        // Default volume for every sound
+        // Default volume for every sound.
         for (final sound in _sounds) {
-          _volumes[sound['file']] = 1.0;
+          _volumes[sound['file'] as String] = 1.0;
         }
 
         _isLoading = false;
@@ -61,51 +59,32 @@ class _PlayerScreenState extends State<PlayerScreen> {
     }
   }
 
-Future<void> _addSound(Map<String, dynamic> sound) async {
-  final file = sound['file'] as String;
+  Future<void> _addSound(Map<String, dynamic> sound) async {
+    final file = sound['file'] as String;
 
-  if (_selectedSounds.contains(file)) {
-    return;
-  }
-
-  final player = AudioPlayer();
-
-final audioContext = AudioContextConfig(
-  focus: AudioContextConfigFocus.mixWithOthers,
-).build();
-
-await player.setAudioContext(audioContext);
-
-  await player.setReleaseMode(ReleaseMode.loop);
-  await player.setVolume(_volumes[file] ?? 1.0);
-
-  setState(() {
-    _players[file] = player;
-    _selectedSounds.add(file);
-  });
-
-  if (_isPlaying) {
-    await player.play(
-      AssetSource('sounds/$file'),
-      volume: _volumes[file] ?? 1.0,
-    );
-
-    await player.setReleaseMode(ReleaseMode.loop);
-  }
-}
-
-  Future<void> _removeSound(String file) async {
-    final player = _players[file];
-
-    if (player != null) {
-      await player.stop();
-      await player.dispose();
+    if (_selectedSounds.contains(file)) {
+      return;
     }
 
+    await audioHandler.addSound(file);
+
     setState(() {
-      _players.remove(file);
+      _selectedSounds.add(file);
+    });
+  }
+
+  Future<void> _removeSound(String file) async {
+    await audioHandler.removeSound(file);
+
+    setState(() {
       _selectedSounds.remove(file);
     });
+
+    if (_selectedSounds.isEmpty) {
+      setState(() {
+        _isPlaying = false;
+      });
+    }
   }
 
   Future<void> _togglePlayback() async {
@@ -114,22 +93,13 @@ await player.setAudioContext(audioContext);
     }
 
     if (_isPlaying) {
-      for (final player in _players.values) {
-        await player.pause();
-      }
+      await audioHandler.pause();
 
       setState(() {
         _isPlaying = false;
       });
     } else {
-      for (final entry in _players.entries) {
-        await entry.value.play(
-          AssetSource('sounds/${entry.key}'),
-          volume: _volumes[entry.key] ?? 1.0,
-        );
-
-        await entry.value.setReleaseMode(ReleaseMode.loop);
-      }
+      await audioHandler.play();
 
       setState(() {
         _isPlaying = true;
@@ -142,43 +112,16 @@ await player.setAudioContext(audioContext);
       _volumes[file] = value;
     });
 
-    final player = _players[file];
-
-    if (player != null) {
-      await player.setVolume(value);
-    }
-  }
-
-  Future<void> _stopAll() async {
-    for (final player in _players.values) {
-      await player.stop();
-
-      // Reset the source so resume() starts it again
-      final file = _players.entries
-          .firstWhere(
-            (entry) => entry.value == player,
-          )
-          .key;
-
-      await player.setSource(
-        AssetSource('sounds/$file'),
-      );
-
-      await player.setReleaseMode(ReleaseMode.loop);
-      await player.setVolume(_volumes[file] ?? 1.0);
-    }
-
-    setState(() {
-      _isPlaying = false;
-    });
+    await audioHandler.setSoundVolume(file, value);
   }
 
   @override
   void dispose() {
-    for (final player in _players.values) {
-      player.dispose();
-    }
-
+    // Do not dispose the audio handler here.
+    //
+    // The handler belongs to the whole application and must
+    // continue running when this screen goes away or the phone
+    // screen is locked.
     super.dispose();
   }
 
@@ -200,7 +143,7 @@ await player.setAudioContext(audioContext);
                   children: [
                     const SizedBox(height: 24),
 
-                    // Main play button
+                    // Main play button.
                     IconButton(
                       onPressed: _selectedSounds.isEmpty
                           ? null
@@ -229,7 +172,7 @@ await player.setAudioContext(audioContext);
 
                     const SizedBox(height: 24),
 
-                    // Sound list
+                    // Sound list.
                     Expanded(
                       child: ListView.builder(
                         padding: const EdgeInsets.symmetric(
