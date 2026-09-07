@@ -3,7 +3,7 @@ import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
-import '../main.dart';
+import '../services/audio_service.dart' as app_audio;
 
 class PlayerScreen extends StatefulWidget {
   const PlayerScreen({super.key});
@@ -33,8 +33,7 @@ class _PlayerScreenState extends State<PlayerScreen> {
 
   Future<void> _loadSounds() async {
     try {
-      final jsonString =
-          await rootBundle.loadString('assets/sounds.json');
+      final jsonString = await rootBundle.loadString('assets/sounds.json');
 
       final List<dynamic> jsonData = jsonDecode(jsonString);
 
@@ -66,7 +65,7 @@ class _PlayerScreenState extends State<PlayerScreen> {
       return;
     }
 
-    await audioHandler.addSound(file);
+    await app_audio.audioHandler.addSound(file);
 
     setState(() {
       _selectedSounds.add(file);
@@ -74,7 +73,7 @@ class _PlayerScreenState extends State<PlayerScreen> {
   }
 
   Future<void> _removeSound(String file) async {
-    await audioHandler.removeSound(file);
+    await app_audio.audioHandler.removeSound(file);
 
     setState(() {
       _selectedSounds.remove(file);
@@ -93,13 +92,13 @@ class _PlayerScreenState extends State<PlayerScreen> {
     }
 
     if (_isPlaying) {
-      await audioHandler.pause();
+      await app_audio.audioHandler.pause();
 
       setState(() {
         _isPlaying = false;
       });
     } else {
-      await audioHandler.play();
+      await app_audio.audioHandler.play();
 
       setState(() {
         _isPlaying = true;
@@ -107,12 +106,24 @@ class _PlayerScreenState extends State<PlayerScreen> {
     }
   }
 
+  Future<void> _stopPlayback() async {
+    await app_audio.audioHandler.stop();
+
+    if (!mounted) {
+      return;
+    }
+
+    setState(() {
+      _isPlaying = false;
+    });
+  }
+
   Future<void> _changeVolume(String file, double value) async {
     setState(() {
       _volumes[file] = value;
     });
 
-    await audioHandler.setSoundVolume(file, value);
+    await app_audio.audioHandler.setSoundVolume(file, value);
   }
 
   @override
@@ -128,159 +139,135 @@ class _PlayerScreenState extends State<PlayerScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(
-        title: const Text('Sleep Sounds'),
-      ),
+      appBar: AppBar(title: const Text('Sleep Sounds')),
       body: _isLoading
-          ? const Center(
-              child: CircularProgressIndicator(),
-            )
+          ? const Center(child: CircularProgressIndicator())
           : _sounds.isEmpty
-              ? const Center(
-                  child: Text('No sounds found.'),
-                )
-              : Column(
-                  children: [
-                    const SizedBox(height: 24),
+          ? const Center(child: Text('No sounds found.'))
+          : Column(
+              children: [
+                const SizedBox(height: 24),
 
-                    // Main play button.
-                    IconButton(
-                      onPressed: _selectedSounds.isEmpty
-                          ? null
-                          : _togglePlayback,
-                      iconSize: 90,
-                      icon: Icon(
-                        _isPlaying
-                            ? Icons.pause_circle_filled
-                            : Icons.play_circle_filled,
-                      ),
-                    ),
+                // Main play button.
+                IconButton(
+                  onPressed: _selectedSounds.isEmpty ? null : _togglePlayback,
+                  iconSize: 90,
+                  icon: Icon(
+                    _isPlaying
+                        ? Icons.pause_circle_filled
+                        : Icons.play_circle_filled,
+                  ),
+                ),
 
-                    const SizedBox(height: 8),
+                const SizedBox(height: 4),
 
-                    Text(
-                      _selectedSounds.isEmpty
-                          ? 'Add some sounds'
-                          : _isPlaying
-                              ? 'Playing'
-                              : 'Paused',
-                      style: const TextStyle(
-                        fontSize: 18,
-                        fontWeight: FontWeight.w500,
-                      ),
-                    ),
+                OutlinedButton.icon(
+                  onPressed: _selectedSounds.isEmpty ? null : _stopPlayback,
+                  icon: const Icon(Icons.stop),
+                  label: const Text('Stop'),
+                ),
 
-                    const SizedBox(height: 24),
+                const SizedBox(height: 8),
 
-                    // Sound list.
-                    Expanded(
-                      child: ListView.builder(
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 16,
-                        ),
-                        itemCount: _sounds.length,
-                        itemBuilder: (context, index) {
-                          final sound = _sounds[index];
+                Text(
+                  _selectedSounds.isEmpty
+                      ? 'Add some sounds'
+                      : _isPlaying
+                      ? 'Playing'
+                      : 'Paused',
+                  style: const TextStyle(
+                    fontSize: 18,
+                    fontWeight: FontWeight.w500,
+                  ),
+                ),
 
-                          final file = sound['file'] as String;
-                          final name = sound['name'] as String;
-                          final icon = sound['icon'] as String;
+                const SizedBox(height: 24),
 
-                          final isSelected =
-                              _selectedSounds.contains(file);
+                // Sound list.
+                Expanded(
+                  child: ListView.builder(
+                    padding: const EdgeInsets.symmetric(horizontal: 16),
+                    itemCount: _sounds.length,
+                    itemBuilder: (context, index) {
+                      final sound = _sounds[index];
 
-                          final volume =
-                              _volumes[file] ?? 1.0;
+                      final file = sound['file'] as String;
+                      final name = sound['name'] as String;
+                      final icon = sound['icon'] as String;
 
-                          return Card(
-                            margin: const EdgeInsets.only(
-                              bottom: 12,
-                            ),
-                            child: Padding(
-                              padding: const EdgeInsets.all(16),
-                              child: Column(
+                      final isSelected = _selectedSounds.contains(file);
+
+                      final volume = _volumes[file] ?? 1.0;
+
+                      return Card(
+                        margin: const EdgeInsets.only(bottom: 12),
+                        child: Padding(
+                          padding: const EdgeInsets.all(16),
+                          child: Column(
+                            children: [
+                              Row(
                                 children: [
-                                  Row(
-                                    children: [
-                                      Text(
-                                        icon,
-                                        style: const TextStyle(
-                                          fontSize: 32,
-                                        ),
-                                      ),
-
-                                      const SizedBox(width: 16),
-
-                                      Expanded(
-                                        child: Text(
-                                          name,
-                                          style: const TextStyle(
-                                            fontSize: 20,
-                                            fontWeight:
-                                                FontWeight.bold,
-                                          ),
-                                        ),
-                                      ),
-
-                                      ElevatedButton(
-                                        onPressed: isSelected
-                                            ? () =>
-                                                _removeSound(file)
-                                            : () =>
-                                                _addSound(sound),
-                                        child: Text(
-                                          isSelected
-                                              ? 'Remove'
-                                              : 'Add',
-                                        ),
-                                      ),
-                                    ],
+                                  Text(
+                                    icon,
+                                    style: const TextStyle(fontSize: 32),
                                   ),
 
-                                  if (isSelected) ...[
-                                    const SizedBox(height: 12),
+                                  const SizedBox(width: 16),
 
-                                    Row(
-                                      children: [
-                                        const Icon(
-                                          Icons.volume_down,
-                                        ),
-
-                                        Expanded(
-                                          child: Slider(
-                                            value: volume,
-                                            min: 0,
-                                            max: 1,
-                                            onChanged: (value) =>
-                                                _changeVolume(
-                                              file,
-                                              value,
-                                            ),
-                                          ),
-                                        ),
-
-                                        const Icon(
-                                          Icons.volume_up,
-                                        ),
-                                      ],
-                                    ),
-
-                                    Text(
-                                      '${(volume * 100).round()}%',
+                                  Expanded(
+                                    child: Text(
+                                      name,
                                       style: const TextStyle(
-                                        fontSize: 12,
+                                        fontSize: 20,
+                                        fontWeight: FontWeight.bold,
                                       ),
                                     ),
-                                  ],
+                                  ),
+
+                                  ElevatedButton(
+                                    onPressed: isSelected
+                                        ? () => _removeSound(file)
+                                        : () => _addSound(sound),
+                                    child: Text(isSelected ? 'Remove' : 'Add'),
+                                  ),
                                 ],
                               ),
-                            ),
-                          );
-                        },
-                      ),
-                    ),
-                  ],
+
+                              if (isSelected) ...[
+                                const SizedBox(height: 12),
+
+                                Row(
+                                  children: [
+                                    const Icon(Icons.volume_down),
+
+                                    Expanded(
+                                      child: Slider(
+                                        value: volume,
+                                        min: 0,
+                                        max: 1,
+                                        onChanged: (value) =>
+                                            _changeVolume(file, value),
+                                      ),
+                                    ),
+
+                                    const Icon(Icons.volume_up),
+                                  ],
+                                ),
+
+                                Text(
+                                  '${(volume * 100).round()}%',
+                                  style: const TextStyle(fontSize: 12),
+                                ),
+                              ],
+                            ],
+                          ),
+                        ),
+                      );
+                    },
+                  ),
                 ),
+              ],
+            ),
     );
   }
 }

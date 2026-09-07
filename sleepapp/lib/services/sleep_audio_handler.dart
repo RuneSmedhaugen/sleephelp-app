@@ -70,7 +70,7 @@ class SleepAudioHandler extends BaseAudioHandler {
       return;
     }
 
-    final clampedVolume = volume.clamp(0.0, 1.0);
+    final clampedVolume = volume.clamp(0.0, 1.0).toDouble();
 
     _volumes[file] = clampedVolume;
 
