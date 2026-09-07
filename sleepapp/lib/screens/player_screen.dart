@@ -1,5 +1,7 @@
+import 'dart:async';
 import 'dart:convert';
 
+import 'package:audio_service/audio_service.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
@@ -22,12 +24,27 @@ class _PlayerScreenState extends State<PlayerScreen> {
   // Volume for each sound.
   final Map<String, double> _volumes = {};
 
+  StreamSubscription<PlaybackState>? _playbackSubscription;
+
   bool _isPlaying = false;
   bool _isLoading = true;
 
   @override
   void initState() {
     super.initState();
+
+    _playbackSubscription = app_audio.audioHandler.playbackState.listen((
+      state,
+    ) {
+      if (!mounted) {
+        return;
+      }
+
+      setState(() {
+        _isPlaying = state.playing;
+      });
+    });
+
     _loadSounds();
   }
 
@@ -36,6 +53,10 @@ class _PlayerScreenState extends State<PlayerScreen> {
       final jsonString = await rootBundle.loadString('assets/sounds.json');
 
       final List<dynamic> jsonData = jsonDecode(jsonString);
+
+      if (!mounted) {
+        return;
+      }
 
       setState(() {
         _sounds = jsonData
@@ -52,6 +73,10 @@ class _PlayerScreenState extends State<PlayerScreen> {
     } catch (e) {
       debugPrint('Failed to load sounds: $e');
 
+      if (!mounted) {
+        return;
+      }
+
       setState(() {
         _isLoading = false;
       });
@@ -65,25 +90,35 @@ class _PlayerScreenState extends State<PlayerScreen> {
       return;
     }
 
-    await app_audio.audioHandler.addSound(file);
-
     setState(() {
       _selectedSounds.add(file);
     });
+
+    try {
+      await app_audio.audioHandler.addSound(file);
+    } catch (e) {
+      debugPrint('Failed to add sound: $e');
+
+      if (!mounted) {
+        return;
+      }
+
+      setState(() {
+        _selectedSounds.remove(file);
+      });
+    }
   }
 
   Future<void> _removeSound(String file) async {
     await app_audio.audioHandler.removeSound(file);
 
+    if (!mounted) {
+      return;
+    }
+
     setState(() {
       _selectedSounds.remove(file);
     });
-
-    if (_selectedSounds.isEmpty) {
-      setState(() {
-        _isPlaying = false;
-      });
-    }
   }
 
   Future<void> _togglePlayback() async {
@@ -93,29 +128,13 @@ class _PlayerScreenState extends State<PlayerScreen> {
 
     if (_isPlaying) {
       await app_audio.audioHandler.pause();
-
-      setState(() {
-        _isPlaying = false;
-      });
     } else {
       await app_audio.audioHandler.play();
-
-      setState(() {
-        _isPlaying = true;
-      });
     }
   }
 
   Future<void> _stopPlayback() async {
     await app_audio.audioHandler.stop();
-
-    if (!mounted) {
-      return;
-    }
-
-    setState(() {
-      _isPlaying = false;
-    });
   }
 
   Future<void> _changeVolume(String file, double value) async {
@@ -128,11 +147,7 @@ class _PlayerScreenState extends State<PlayerScreen> {
 
   @override
   void dispose() {
-    // Do not dispose the audio handler here.
-    //
-    // The handler belongs to the whole application and must
-    // continue running when this screen goes away or the phone
-    // screen is locked.
+    _playbackSubscription?.cancel();
     super.dispose();
   }
 
@@ -211,9 +226,7 @@ class _PlayerScreenState extends State<PlayerScreen> {
                                     icon,
                                     style: const TextStyle(fontSize: 32),
                                   ),
-
                                   const SizedBox(width: 16),
-
                                   Expanded(
                                     child: Text(
                                       name,
@@ -223,7 +236,6 @@ class _PlayerScreenState extends State<PlayerScreen> {
                                       ),
                                     ),
                                   ),
-
                                   ElevatedButton(
                                     onPressed: isSelected
                                         ? () => _removeSound(file)
@@ -239,7 +251,6 @@ class _PlayerScreenState extends State<PlayerScreen> {
                                 Row(
                                   children: [
                                     const Icon(Icons.volume_down),
-
                                     Expanded(
                                       child: Slider(
                                         value: volume,
@@ -249,7 +260,6 @@ class _PlayerScreenState extends State<PlayerScreen> {
                                             _changeVolume(file, value),
                                       ),
                                     ),
-
                                     const Icon(Icons.volume_up),
                                   ],
                                 ),
