@@ -1,148 +1,270 @@
 import 'dart:async';
-import 'dart:convert';
 
 import 'package:audio_service/audio_service.dart';
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
 
-import '../services/audio_service.dart' as app_audio;
+import '../models/sound.dart';
+import '../models/sound_mix.dart';
+import '../services/mix_storage.dart';
+import '../services/sleep_audio_handler.dart';
+import '../widgets/sleep_timer_sheet.dart';
+import 'library_view.dart';
+import 'saved_mixes_view.dart';
+import 'sleep_home_view.dart';
 
 class PlayerScreen extends StatefulWidget {
-  const PlayerScreen({super.key});
+  const PlayerScreen({
+    super.key,
+    required this.audio,
+    required this.sounds,
+    required this.savedMixes,
+  });
+
+  final SleepAudioHandler audio;
+  final List<Sound> sounds;
+  final List<SoundMix> savedMixes;
 
   @override
   State<PlayerScreen> createState() => _PlayerScreenState();
 }
 
 class _PlayerScreenState extends State<PlayerScreen> {
-  // All sounds loaded from sounds.json.
-  List<Map<String, dynamic>> _sounds = [];
-
-  // Which sounds have been added to the mixer.
-  final Set<String> _selectedSounds = {};
-
-  // Volume for each sound.
-  final Map<String, double> _volumes = {};
-
+  final MixStorage _mixStorage = MixStorage();
+  final Set<String> _busySounds = {};
+  late List<SoundMix> _savedMixes;
   StreamSubscription<PlaybackState>? _playbackSubscription;
-
+  int _activeTab = 0;
   bool _isPlaying = false;
-  bool _isLoading = true;
+
+  SleepAudioHandler get _audio => widget.audio;
+  List<Sound> get _sounds => widget.sounds;
 
   @override
   void initState() {
     super.initState();
-
-    _playbackSubscription = app_audio.audioHandler.playbackState.listen((
-      state,
-    ) {
-      if (!mounted) {
-        return;
-      }
-
-      setState(() {
-        _isPlaying = state.playing;
-      });
+    _savedMixes = widget.savedMixes;
+    _isPlaying = _audio.isPlaying;
+    _playbackSubscription = _audio.playbackState.listen((state) {
+      if (!mounted) return;
+      setState(() => _isPlaying = state.playing);
     });
-
-    _loadSounds();
   }
 
-  Future<void> _loadSounds() async {
+  Future<void> _toggleSound(Sound sound) async {
+    if (_busySounds.contains(sound.file)) return;
+    setState(() => _busySounds.add(sound.file));
     try {
-      final jsonString = await rootBundle.loadString('assets/sounds.json');
-
-      final List<dynamic> jsonData = jsonDecode(jsonString);
-
-      if (!mounted) {
-        return;
+      if (_audio.selectedSounds.contains(sound.file)) {
+        await _audio.removeSound(sound.file);
+      } else {
+        await _audio.addSound(sound.file);
       }
-
-      setState(() {
-        _sounds = jsonData
-            .map((sound) => Map<String, dynamic>.from(sound))
-            .toList();
-
-        // Default volume for every sound.
-        for (final sound in _sounds) {
-          _volumes[sound['file'] as String] = 1.0;
-        }
-
-        _isLoading = false;
-      });
-    } catch (e) {
-      debugPrint('Failed to load sounds: $e');
-
-      if (!mounted) {
-        return;
-      }
-
-      setState(() {
-        _isLoading = false;
-      });
+      if (mounted) setState(() {});
+    } catch (error) {
+      debugPrint('Could not change sound selection: $error');
+      _showMessage('That sound could not be loaded. Try another one.');
+    } finally {
+      if (mounted) setState(() => _busySounds.remove(sound.file));
     }
   }
 
-  Future<void> _addSound(Map<String, dynamic> sound) async {
-    final file = sound['file'] as String;
-
-    if (_selectedSounds.contains(file)) {
-      return;
-    }
-
-    setState(() {
-      _selectedSounds.add(file);
-    });
-
+  Future<void> _setSoundVolume(String file, double value) async {
     try {
-      await app_audio.audioHandler.addSound(file);
-    } catch (e) {
-      debugPrint('Failed to add sound: $e');
-
-      if (!mounted) {
-        return;
-      }
-
-      setState(() {
-        _selectedSounds.remove(file);
-      });
+      await _audio.setSoundVolume(file, value);
+      if (mounted) setState(() {});
+    } catch (error) {
+      debugPrint('Could not change sound volume: $error');
+      _showMessage('Volume could not be changed.');
     }
   }
 
-  Future<void> _removeSound(String file) async {
-    await app_audio.audioHandler.removeSound(file);
-
-    if (!mounted) {
-      return;
-    }
-
-    setState(() {
-      _selectedSounds.remove(file);
-    });
+  Future<void> _setMasterVolume(double value) async {
+    await _audio.setMasterVolume(value);
+    if (mounted) setState(() {});
   }
 
   Future<void> _togglePlayback() async {
-    if (_selectedSounds.isEmpty) {
+    if (_audio.selectedSounds.isEmpty) {
+      _showMessage('Add a sound to your mix first.');
       return;
     }
-
-    if (_isPlaying) {
-      await app_audio.audioHandler.pause();
-    } else {
-      await app_audio.audioHandler.play();
+    try {
+      if (_audio.isPlaying) {
+        await _audio.pause();
+      } else {
+        await _audio.play();
+      }
+    } catch (error) {
+      debugPrint('Playback command failed: $error');
+      _showMessage('Playback could not be started.');
     }
   }
 
   Future<void> _stopPlayback() async {
-    await app_audio.audioHandler.stop();
+    try {
+      await _audio.stop();
+    } catch (error) {
+      debugPrint('Stop command failed: $error');
+      _showMessage('Playback could not be stopped.');
+    }
   }
 
-  Future<void> _changeVolume(String file, double value) async {
-    setState(() {
-      _volumes[file] = value;
-    });
+  Future<void> _saveCurrentMix() async {
+    final selected = _audio.selectedSounds.toList();
+    if (selected.isEmpty) {
+      _showMessage('Add a sound before saving a mix.');
+      return;
+    }
 
-    await app_audio.audioHandler.setSoundVolume(file, value);
+    final name = await _askForMixName();
+    if (name == null || name.trim().isEmpty) return;
+
+    final mix = SoundMix(
+      id: DateTime.now().microsecondsSinceEpoch.toString(),
+      name: name.trim(),
+      sounds: selected,
+      volumes: {
+        for (final file in selected) file: _audio.soundVolumes[file] ?? 1,
+      },
+      updatedAt: DateTime.now(),
+    );
+    final nextMixes = [mix, ..._savedMixes];
+    try {
+      await _mixStorage.save(nextMixes);
+      if (!mounted) return;
+      setState(() => _savedMixes = nextMixes);
+      _showMessage('“${mix.name}” saved on this device.');
+    } catch (error) {
+      debugPrint('Could not save mix: $error');
+      _showMessage('Could not save this mix on your device.');
+    }
+  }
+
+  Future<String?> _askForMixName() async {
+    final controller = TextEditingController(text: 'My night mix');
+    final name = await showDialog<String>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        backgroundColor: const Color(0xFF1A2031),
+        title: const Text('Name this mix'),
+        content: TextField(
+          controller: controller,
+          autofocus: true,
+          maxLength: 32,
+          textCapitalization: TextCapitalization.sentences,
+          decoration: const InputDecoration(hintText: 'A name you’ll remember'),
+          onSubmitted: (value) => Navigator.pop(dialogContext, value),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext),
+            child: const Text('Cancel'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(dialogContext, controller.text),
+            child: const Text('Save mix'),
+          ),
+        ],
+      ),
+    );
+    controller.dispose();
+    return name;
+  }
+
+  Future<void> _playSavedMix(SoundMix mix) async {
+    final availableFiles = _sounds.map((sound) => sound.file).toSet();
+    final target = mix.sounds.where(availableFiles.contains).toSet();
+    if (target.isEmpty) {
+      _showMessage('This mix has no sounds in the current library.');
+      return;
+    }
+
+    try {
+      for (final file in _audio.selectedSounds.difference(target).toList()) {
+        await _audio.removeSound(file);
+      }
+      for (final file in target.difference(_audio.selectedSounds)) {
+        await _audio.addSound(file);
+      }
+      for (final entry in mix.volumes.entries) {
+        if (target.contains(entry.key)) {
+          await _audio.setSoundVolume(entry.key, entry.value);
+        }
+      }
+      await _audio.play();
+      if (mounted) setState(() {});
+      _showMessage('Playing “${mix.name}”.');
+    } catch (error) {
+      debugPrint('Could not load saved mix: $error');
+      _showMessage('Could not load this mix.');
+    }
+  }
+
+  Future<void> _deleteSavedMix(SoundMix mix) async {
+    final shouldDelete = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        backgroundColor: const Color(0xFF1A2031),
+        title: const Text('Delete saved mix?'),
+        content: Text('“${mix.name}” will be removed from this device.'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext, false),
+            child: const Text('Keep it'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(dialogContext, true),
+            child: const Text('Delete'),
+          ),
+        ],
+      ),
+    );
+    if (shouldDelete != true) return;
+
+    final nextMixes = _savedMixes.where((item) => item.id != mix.id).toList();
+    try {
+      await _mixStorage.save(nextMixes);
+      if (mounted) setState(() => _savedMixes = nextMixes);
+    } catch (error) {
+      debugPrint('Could not delete saved mix: $error');
+      _showMessage('Could not delete this mix.');
+    }
+  }
+
+  Future<void> _showTimer() async {
+    await showModalBottomSheet<void>(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: const Color(0xFF111726),
+      barrierColor: Colors.black.withValues(alpha: 0.62),
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
+      ),
+      builder: (sheetContext) => SleepTimerSheet(
+        initialState: _audio.sleepTimerState,
+        onStart: (duration, fadeOut) async {
+          await _audio.startSleepTimer(duration: duration, fadeOut: fadeOut);
+          if (sheetContext.mounted) Navigator.pop(sheetContext);
+        },
+        onCancel: () async {
+          await _audio.cancelSleepTimer();
+          if (sheetContext.mounted) Navigator.pop(sheetContext);
+        },
+      ),
+    );
+  }
+
+  void _showMessage(String message) {
+    if (!mounted) return;
+    ScaffoldMessenger.of(context)
+      ..hideCurrentSnackBar()
+      ..showSnackBar(
+        SnackBar(
+          content: Text(message),
+          behavior: SnackBarBehavior.floating,
+          backgroundColor: const Color(0xFF293149),
+        ),
+      );
   }
 
   @override
@@ -153,131 +275,74 @@ class _PlayerScreenState extends State<PlayerScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final selected = _audio.selectedSounds;
+    final pages = [
+      SleepHomeView(
+        sounds: _sounds,
+        selectedSounds: selected,
+        volumes: _audio.soundVolumes,
+        masterVolume: _audio.masterVolume,
+        isPlaying: _isPlaying,
+        timerState: _audio.sleepTimerState,
+        timerStates: _audio.sleepTimerStates,
+        onPlayPause: _togglePlayback,
+        onStop: _stopPlayback,
+        onTimer: _showTimer,
+        onSaveMix: _saveCurrentMix,
+        onBrowse: () => setState(() => _activeTab = 1),
+        onVolumeChanged: _setSoundVolume,
+        onMasterVolumeChanged: _setMasterVolume,
+        onRemoveSound: (file) {
+          final sound = _soundForFile(file);
+          if (sound != null) unawaited(_toggleSound(sound));
+        },
+        onAddSound: (sound) => unawaited(_toggleSound(sound)),
+      ),
+      LibraryView(
+        sounds: _sounds,
+        selectedSounds: selected,
+        onToggleSound: (sound) => unawaited(_toggleSound(sound)),
+      ),
+      SavedMixesView(
+        mixes: _savedMixes,
+        sounds: _sounds,
+        onPlay: (mix) => unawaited(_playSavedMix(mix)),
+        onDelete: (mix) => unawaited(_deleteSavedMix(mix)),
+        onBrowse: () => setState(() => _activeTab = 1),
+      ),
+    ];
+
     return Scaffold(
-      appBar: AppBar(title: const Text('Sleep Sounds')),
-      body: _isLoading
-          ? const Center(child: CircularProgressIndicator())
-          : _sounds.isEmpty
-          ? const Center(child: Text('No sounds found.'))
-          : Column(
-              children: [
-                const SizedBox(height: 24),
-
-                // Main play button.
-                IconButton(
-                  onPressed: _selectedSounds.isEmpty ? null : _togglePlayback,
-                  iconSize: 90,
-                  icon: Icon(
-                    _isPlaying
-                        ? Icons.pause_circle_filled
-                        : Icons.play_circle_filled,
-                  ),
-                ),
-
-                const SizedBox(height: 4),
-
-                OutlinedButton.icon(
-                  onPressed: _selectedSounds.isEmpty ? null : _stopPlayback,
-                  icon: const Icon(Icons.stop),
-                  label: const Text('Stop'),
-                ),
-
-                const SizedBox(height: 8),
-
-                Text(
-                  _selectedSounds.isEmpty
-                      ? 'Add some sounds'
-                      : _isPlaying
-                      ? 'Playing'
-                      : 'Paused',
-                  style: const TextStyle(
-                    fontSize: 18,
-                    fontWeight: FontWeight.w500,
-                  ),
-                ),
-
-                const SizedBox(height: 24),
-
-                // Sound list.
-                Expanded(
-                  child: ListView.builder(
-                    padding: const EdgeInsets.symmetric(horizontal: 16),
-                    itemCount: _sounds.length,
-                    itemBuilder: (context, index) {
-                      final sound = _sounds[index];
-
-                      final file = sound['file'] as String;
-                      final name = sound['name'] as String;
-                      final icon = sound['icon'] as String;
-
-                      final isSelected = _selectedSounds.contains(file);
-
-                      final volume = _volumes[file] ?? 1.0;
-
-                      return Card(
-                        margin: const EdgeInsets.only(bottom: 12),
-                        child: Padding(
-                          padding: const EdgeInsets.all(16),
-                          child: Column(
-                            children: [
-                              Row(
-                                children: [
-                                  Text(
-                                    icon,
-                                    style: const TextStyle(fontSize: 32),
-                                  ),
-                                  const SizedBox(width: 16),
-                                  Expanded(
-                                    child: Text(
-                                      name,
-                                      style: const TextStyle(
-                                        fontSize: 20,
-                                        fontWeight: FontWeight.bold,
-                                      ),
-                                    ),
-                                  ),
-                                  ElevatedButton(
-                                    onPressed: isSelected
-                                        ? () => _removeSound(file)
-                                        : () => _addSound(sound),
-                                    child: Text(isSelected ? 'Remove' : 'Add'),
-                                  ),
-                                ],
-                              ),
-
-                              if (isSelected) ...[
-                                const SizedBox(height: 12),
-
-                                Row(
-                                  children: [
-                                    const Icon(Icons.volume_down),
-                                    Expanded(
-                                      child: Slider(
-                                        value: volume,
-                                        min: 0,
-                                        max: 1,
-                                        onChanged: (value) =>
-                                            _changeVolume(file, value),
-                                      ),
-                                    ),
-                                    const Icon(Icons.volume_up),
-                                  ],
-                                ),
-
-                                Text(
-                                  '${(volume * 100).round()}%',
-                                  style: const TextStyle(fontSize: 12),
-                                ),
-                              ],
-                            ],
-                          ),
-                        ),
-                      );
-                    },
-                  ),
-                ),
-              ],
-            ),
+      backgroundColor: const Color(0xFF0D1220),
+      body: IndexedStack(index: _activeTab, children: pages),
+      bottomNavigationBar: NavigationBar(
+        selectedIndex: _activeTab,
+        onDestinationSelected: (index) => setState(() => _activeTab = index),
+        destinations: const [
+          NavigationDestination(
+            icon: Icon(Icons.nightlight_outlined),
+            selectedIcon: Icon(Icons.nightlight_round),
+            label: 'Tonight',
+          ),
+          NavigationDestination(
+            icon: Icon(Icons.graphic_eq_outlined),
+            selectedIcon: Icon(Icons.graphic_eq_rounded),
+            label: 'Sounds',
+          ),
+          NavigationDestination(
+            icon: Icon(Icons.bookmark_border_rounded),
+            selectedIcon: Icon(Icons.bookmark_rounded),
+            label: 'Saved',
+          ),
+        ],
+      ),
     );
+  }
+
+  Sound? _soundForFile(String file) {
+    for (final sound in _sounds) {
+      if (sound.file == file) return sound;
+    }
+    return null;
   }
 }
