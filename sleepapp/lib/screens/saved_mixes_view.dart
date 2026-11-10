@@ -12,6 +12,8 @@ class SavedMixesView extends StatelessWidget {
     required this.onPlay,
     required this.onDelete,
     required this.onBrowse,
+    required this.rotationSummary,
+    required this.onRotation,
   });
 
   final List<SoundMix> mixes;
@@ -19,6 +21,8 @@ class SavedMixesView extends StatelessWidget {
   final ValueChanged<SoundMix> onPlay;
   final ValueChanged<SoundMix> onDelete;
   final VoidCallback onBrowse;
+  final String rotationSummary;
+  final VoidCallback onRotation;
 
   @override
   Widget build(BuildContext context) => SafeArea(
@@ -46,7 +50,18 @@ class SavedMixesView extends StatelessWidget {
               const SizedBox(height: 22),
               if (mixes.isEmpty)
                 _EmptySaved(onBrowse: onBrowse)
-              else
+              else ...[
+                Card(
+                  margin: const EdgeInsets.only(bottom: 14),
+                  color: const Color(0xFF171D2D),
+                  child: ListTile(
+                    leading: const Icon(Icons.event_repeat_rounded),
+                    title: const Text('Mix rotation'),
+                    subtitle: Text(rotationSummary),
+                    trailing: const Icon(Icons.chevron_right_rounded),
+                    onTap: onRotation,
+                  ),
+                ),
                 for (final mix in mixes)
                   _SavedMixCard(
                     mix: mix,
@@ -54,6 +69,7 @@ class SavedMixesView extends StatelessWidget {
                     onPlay: () => onPlay(mix),
                     onDelete: () => onDelete(mix),
                   ),
+              ],
               const SizedBox(height: 12),
               Container(
                 padding: const EdgeInsets.all(16),

@@ -13,6 +13,8 @@ class SleepHomeView extends StatelessWidget {
     required this.volumes,
     required this.masterVolume,
     required this.isPlaying,
+    required this.hasPlaybackSession,
+    required this.mixName,
     required this.timerState,
     required this.timerStates,
     required this.onPlayPause,
@@ -31,6 +33,8 @@ class SleepHomeView extends StatelessWidget {
   final Map<String, double> volumes;
   final double masterVolume;
   final bool isPlaying;
+  final bool hasPlaybackSession;
+  final String? mixName;
   final SleepTimerState timerState;
   final Stream<SleepTimerState> timerStates;
   final VoidCallback onPlayPause;
@@ -86,6 +90,8 @@ class SleepHomeView extends StatelessWidget {
               else ...[
                 _PlaybackCard(
                   isPlaying: isPlaying,
+                  canStop: hasPlaybackSession,
+                  mixName: mixName,
                   count: selected.length,
                   onPlayPause: onPlayPause,
                   onStop: onStop,
@@ -384,12 +390,16 @@ class _SectionTitle extends StatelessWidget {
 class _PlaybackCard extends StatelessWidget {
   const _PlaybackCard({
     required this.isPlaying,
+    required this.canStop,
+    required this.mixName,
     required this.count,
     required this.onPlayPause,
     required this.onStop,
   });
 
   final bool isPlaying;
+  final bool canStop;
+  final String? mixName;
   final int count;
   final VoidCallback onPlayPause;
   final VoidCallback onStop;
@@ -434,7 +444,10 @@ class _PlaybackCard extends StatelessWidget {
               ),
               const SizedBox(height: 3),
               Text(
-                '$count ${count == 1 ? 'layer' : 'layers'} in your mix',
+                mixName ??
+                    '$count ${count == 1 ? 'layer' : 'layers'} in your mix',
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
                 style: const TextStyle(color: Color(0xFF929DB2), fontSize: 12),
               ),
             ],
@@ -455,7 +468,7 @@ class _PlaybackCard extends StatelessWidget {
         ),
         IconButton(
           tooltip: 'Stop and reset',
-          onPressed: isPlaying ? onStop : null,
+          onPressed: canStop ? onStop : null,
           icon: const Icon(Icons.stop_rounded, size: 22),
           color: const Color(0xFF9BA5B7),
         ),

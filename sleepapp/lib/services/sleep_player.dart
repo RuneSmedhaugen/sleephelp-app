@@ -6,6 +6,7 @@ abstract interface class SleepPlayer {
   Stream<bool> get playingStates;
 
   Future<void> loadLoopedAsset(String path);
+  Future<void> loadLoopedFile(String path);
   Future<void> setVolume(double volume);
   Future<void> play();
   Future<void> pause();
@@ -28,6 +29,12 @@ class JustAudioSleepPlayer implements SleepPlayer {
   @override
   Future<void> loadLoopedAsset(String path) async {
     await _player.setAsset(path);
+    await _player.setLoopMode(LoopMode.one);
+  }
+
+  @override
+  Future<void> loadLoopedFile(String path) async {
+    await _player.setFilePath(path);
     await _player.setLoopMode(LoopMode.one);
   }
 

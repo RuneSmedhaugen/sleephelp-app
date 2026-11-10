@@ -6,12 +6,28 @@ class Sound {
     required this.name,
     required this.icon,
     required this.category,
+    this.localPath,
   });
 
   final String file;
   final String name;
   final IconData icon;
   final String category;
+  final String? localPath;
+
+  static const importedCategory = 'Imported';
+
+  factory Sound.imported({
+    required String id,
+    required String name,
+    required String path,
+  }) => Sound(
+    file: 'imported/$id',
+    name: name,
+    icon: Icons.audio_file_outlined,
+    category: importedCategory,
+    localPath: path,
+  );
 
   factory Sound.fromJson(Map<String, dynamic> json) {
     final file = json['file'] as String;

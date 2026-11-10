@@ -14,9 +14,8 @@ class SleepAudioHandler extends BaseAudioHandler {
   SleepAudioHandler({
     SleepPlayer Function()? playerFactory,
     bool listenForAudioSessionEvents = true,
-    Duration timerTickInterval = const Duration(seconds: 1),
-  }) : _playerFactory = playerFactory ?? JustAudioSleepPlayer.new,
-       _timerTickInterval = timerTickInterval {
+    this._timerTickInterval = const Duration(seconds: 1),
+  }) : _playerFactory = playerFactory ?? JustAudioSleepPlayer.new {
     mediaItem.add(
       const MediaItem(id: 'sleep-mix', title: 'Sleep Sounds', album: 'REST'),
     );
@@ -44,6 +43,7 @@ class SleepAudioHandler extends BaseAudioHandler {
 
   bool _playIntent = false;
   bool _isPlaying = false;
+  bool _hasPlaybackSession = false;
   bool _disposed = false;
   bool _pauseRequested = false;
   bool _resumeAfterInterruption = false;
@@ -57,15 +57,17 @@ class SleepAudioHandler extends BaseAudioHandler {
   String? _lastError;
 
   bool get isPlaying => _isPlaying;
+  // A paused mix is still a session and can be resumed from the lock screen.
+  bool get hasPlaybackSession => _hasPlaybackSession;
   double get masterVolume => _masterVolume;
   Set<String> get selectedSounds => Set.unmodifiable(_players.keys);
   Map<String, double> get soundVolumes => Map.unmodifiable(_soundVolumes);
   Stream<SleepTimerState> get sleepTimerStates => _timerStates.stream;
   SleepTimerState get sleepTimerState => _currentTimerState();
 
-  /// Add one looped asset. Concurrent requests for the same file share one
+  /// Add one looped sound. Concurrent requests for the same sound share one
   /// load operation, and a failed load always releases its player.
-  Future<void> addSound(String file) {
+  Future<void> addSound(String file, {String? localPath}) {
     if (_disposed) {
       return Future.error(StateError('The audio handler has been disposed.'));
     }
@@ -74,7 +76,11 @@ class SleepAudioHandler extends BaseAudioHandler {
         .putIfAbsent(file, () async {
           final player = _playerFactory();
           try {
-            await player.loadLoopedAsset('assets/sounds/$file');
+            if (localPath == null) {
+              await player.loadLoopedAsset('assets/sounds/$file');
+            } else {
+              await player.loadLoopedFile(localPath);
+            }
             await player.setVolume(_effectiveVolume(file, 1.0));
 
             if (_disposed) {
@@ -105,6 +111,38 @@ class SleepAudioHandler extends BaseAudioHandler {
   Future<void> removeSound(String file) =>
       _enqueueTransport(() => _removeSound(file));
 
+  /// Replace the layers as one transport operation so media controls cannot
+  /// start or resume audio halfway through an automatic mix change.
+  Future<bool> replaceMix(
+    Map<String, String?> sources,
+    Map<String, double> volumes, {
+    required bool onlyWhenIdle,
+  }) => _enqueueTransport(() async {
+    if (_disposed || (onlyWhenIdle && _hasPlaybackSession)) return false;
+    final previous = selectedSounds;
+    final target = sources.keys.toSet();
+    try {
+      for (final file in target.difference(previous)) {
+        await addSound(file, localPath: sources[file]);
+      }
+      if (!_players.keys.toSet().containsAll(target)) {
+        throw StateError('One or more mix layers could not be loaded.');
+      }
+    } catch (_) {
+      for (final file in selectedSounds.difference(previous)) {
+        await _removeSound(file);
+      }
+      rethrow;
+    }
+    for (final file in previous.difference(target)) {
+      await _removeSound(file);
+    }
+    for (final file in target) {
+      await setSoundVolume(file, volumes[file] ?? 1);
+    }
+    return true;
+  });
+
   Future<void> _removeSound(String file) async {
     final addOperation = _addOperations[file];
     if (addOperation != null) {
@@ -126,6 +164,7 @@ class SleepAudioHandler extends BaseAudioHandler {
     if (_players.isEmpty) {
       _playIntent = false;
       _isPlaying = false;
+      _hasPlaybackSession = false;
       _cancelSleepTimer(resetFade: true);
     }
     _publishPlaybackState();
@@ -218,6 +257,7 @@ class SleepAudioHandler extends BaseAudioHandler {
     _pauseRequested = false;
     _playIntent = true;
     _isPlaying = true;
+    _hasPlaybackSession = true;
     _resumeTimerClock();
     _publishPlaybackState();
 
@@ -253,6 +293,7 @@ class SleepAudioHandler extends BaseAudioHandler {
     _pauseRequested = true;
     _playIntent = false;
     _isPlaying = false;
+    _hasPlaybackSession = false;
     _cancelSleepTimer(resetFade: true);
     await _applyVolumesToAll();
     await _runForAll((_, player) => _stopAndRewind(player));
@@ -318,11 +359,12 @@ class SleepAudioHandler extends BaseAudioHandler {
     );
   }
 
-  Future<void> _enqueueTransport(Future<void> Function() operation) {
+  Future<T> _enqueueTransport<T>(Future<T> Function() operation) {
     final result = _transportTail.then((_) => operation());
-    _transportTail = result.catchError((Object error) {
-      debugPrint('Audio command failed: $error');
-    });
+    _transportTail = result.then<void>(
+      (_) {},
+      onError: (Object error) => debugPrint('Audio command failed: $error'),
+    );
     return result;
   }
 
@@ -347,6 +389,7 @@ class SleepAudioHandler extends BaseAudioHandler {
     await _ignorePlayerError(player.stop);
     await _ignorePlayerError(player.dispose);
     if (_players.isEmpty) {
+      _hasPlaybackSession = false;
       _playIntent = false;
       _isPlaying = false;
       _cancelSleepTimer(resetFade: true);
@@ -477,8 +520,9 @@ class SleepAudioHandler extends BaseAudioHandler {
   Future<void> _tickSleepTimer() async {
     if (_timerTickInProgress) return;
     final duration = _timerDuration;
-    if (duration == null || _timerCompleted || !_timerStopwatch.isRunning)
+    if (duration == null || _timerCompleted || !_timerStopwatch.isRunning) {
       return;
+    }
 
     _timerTickInProgress = true;
     try {
@@ -517,6 +561,7 @@ class SleepAudioHandler extends BaseAudioHandler {
     _timerCompleted = true;
     _playIntent = false;
     _isPlaying = false;
+    _hasPlaybackSession = false;
     await _setFadeGain(0.0);
     await _runForAll((_, player) => _stopAndRewind(player));
     await super.stop();

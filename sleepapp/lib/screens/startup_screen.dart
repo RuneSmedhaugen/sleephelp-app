@@ -4,9 +4,12 @@ import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
+import '../models/mix_rotation.dart';
 import '../models/sound.dart';
 import '../models/sound_mix.dart';
 import '../services/audio_service.dart';
+import '../services/imported_sound_storage.dart';
+import '../services/mix_rotation_storage.dart';
 import '../services/mix_storage.dart';
 import '../services/sleep_audio_handler.dart';
 import '../widgets/rest_intro.dart';
@@ -19,7 +22,12 @@ class StartupScreen extends StatefulWidget {
   State<StartupScreen> createState() => _StartupScreenState();
 }
 
-typedef _StartupData = (SleepAudioHandler, List<Sound>, List<SoundMix>);
+typedef _StartupData = (
+  SleepAudioHandler,
+  List<Sound>,
+  List<SoundMix>,
+  (MixRotation, String?),
+);
 
 class _StartupScreenState extends State<StartupScreen>
     with SingleTickerProviderStateMixin {
@@ -49,6 +57,7 @@ class _StartupScreenState extends State<StartupScreen>
         initializeSleepAudio(),
         _loadSounds(),
         _loadSavedMixes(),
+        _loadRotation(),
       ).wait;
     } catch (error) {
       debugPrint('Could not start REST: $error');
@@ -58,9 +67,15 @@ class _StartupScreenState extends State<StartupScreen>
 
   Future<List<Sound>> _loadSounds() async {
     final json = await rootBundle.loadString('assets/sounds.json');
-    return (jsonDecode(json) as List<dynamic>)
+    final sounds = (jsonDecode(json) as List<dynamic>)
         .map((item) => Sound.fromJson(item as Map<String, dynamic>))
         .toList();
+    try {
+      sounds.addAll(await ImportedSoundStorage().load());
+    } catch (error) {
+      debugPrint('Imported sounds are unavailable: $error');
+    }
+    return sounds;
   }
 
   Future<List<SoundMix>> _loadSavedMixes() async {
@@ -69,6 +84,15 @@ class _StartupScreenState extends State<StartupScreen>
     } catch (error) {
       debugPrint('Saved mixes are unavailable: $error');
       return [];
+    }
+  }
+
+  Future<(MixRotation, String?)> _loadRotation() async {
+    try {
+      return await MixRotationStorage().load();
+    } catch (error) {
+      debugPrint('Mix rotation is unavailable: $error');
+      return (const MixRotation(), null);
     }
   }
 
@@ -87,11 +111,13 @@ class _StartupScreenState extends State<StartupScreen>
         if (_intro.isCompleted) {
           final data = snapshot.data;
           if (data != null) {
-            final (audio, sounds, mixes) = data;
+            final (audio, sounds, mixes, (rotation, lastPlayedId)) = data;
             screen = PlayerScreen(
               audio: audio,
               sounds: sounds,
               savedMixes: mixes,
+              rotation: rotation,
+              lastPlayedId: lastPlayedId,
             );
           } else if (snapshot.hasError) {
             screen = const Scaffold(

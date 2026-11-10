@@ -186,6 +186,7 @@ class FakeSleepPlayer implements SleepPlayer {
   double volume = 1.0;
   int loadCalls = 0;
   int playCalls = 0;
+  @override
   bool isPlaying = false;
   bool disposed = false;
 
@@ -199,6 +200,9 @@ class FakeSleepPlayer implements SleepPlayer {
     if (loadError != null) throw loadError!;
     loadedAsset = path;
   }
+
+  @override
+  Future<void> loadLoopedFile(String path) => loadLoopedAsset(path);
 
   @override
   Future<void> setVolume(double value) async {

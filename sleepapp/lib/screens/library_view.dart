@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 
 import '../models/sound.dart';
@@ -9,20 +10,42 @@ class LibraryView extends StatefulWidget {
     required this.sounds,
     required this.selectedSounds,
     required this.onToggleSound,
+    required this.onImport,
   });
 
   final List<Sound> sounds;
   final Set<String> selectedSounds;
   final ValueChanged<Sound> onToggleSound;
+  final Future<bool> Function() onImport;
 
   @override
   State<LibraryView> createState() => _LibraryViewState();
 }
 
 class _LibraryViewState extends State<LibraryView> {
-  static const _categories = ['All', 'Nature', 'Water', 'Warmth', 'Ambient'];
+  static const _categories = [
+    'All',
+    if (!kIsWeb) Sound.importedCategory,
+    'Nature',
+    'Water',
+    'Warmth',
+    'Ambient',
+  ];
   final _searchController = TextEditingController();
   String _category = 'All';
+  bool _importing = false;
+
+  Future<void> _importSound() async {
+    setState(() => _importing = true);
+    try {
+      if (await widget.onImport() && mounted) {
+        _searchController.clear();
+        setState(() => _category = Sound.importedCategory);
+      }
+    } finally {
+      if (mounted) setState(() => _importing = false);
+    }
+  }
 
   @override
   void dispose() {
@@ -49,14 +72,33 @@ class _LibraryViewState extends State<LibraryView> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                const Text(
-                  'Find your calm',
-                  style: TextStyle(
-                    color: Color(0xFFF1F2F7),
-                    fontSize: 27,
-                    fontWeight: FontWeight.w600,
-                    letterSpacing: -0.7,
-                  ),
+                Row(
+                  children: [
+                    const Expanded(
+                      child: Text(
+                        'Find your calm',
+                        style: TextStyle(
+                          color: Color(0xFFF1F2F7),
+                          fontSize: 27,
+                          fontWeight: FontWeight.w600,
+                          letterSpacing: -0.7,
+                        ),
+                      ),
+                    ),
+                    if (!kIsWeb)
+                      TextButton.icon(
+                        onPressed: _importing ? null : _importSound,
+                        icon: _importing
+                            ? const SizedBox.square(
+                                dimension: 16,
+                                child: CircularProgressIndicator(
+                                  strokeWidth: 2,
+                                ),
+                              )
+                            : const Icon(Icons.file_upload_outlined, size: 18),
+                        label: const Text('Import'),
+                      ),
+                  ],
                 ),
                 const SizedBox(height: 6),
                 const Text(
@@ -158,10 +200,12 @@ class _LibraryViewState extends State<LibraryView> {
           const SizedBox(height: 12),
           Expanded(
             child: visibleSounds.isEmpty
-                ? const Center(
+                ? Center(
                     child: Text(
-                      'No sounds match that search.',
-                      style: TextStyle(color: Color(0xFF929DB2)),
+                      _category == Sound.importedCategory && query.isEmpty
+                          ? 'Use Import to add your own sounds.'
+                          : 'No sounds match that search.',
+                      style: const TextStyle(color: Color(0xFF929DB2)),
                     ),
                   )
                 : GridView.builder(
