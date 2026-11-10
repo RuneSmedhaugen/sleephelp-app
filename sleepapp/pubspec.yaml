@@ -28,3 +28,9 @@ flutter:
   assets:
     - assets/sounds/
     - assets/sounds.json
+    - assets/fonts/SpaceGrotesk-OFL.txt
+
+  fonts:
+    - family: Space Grotesk
+      fonts:
+        - asset: assets/fonts/SpaceGrotesk-Variable.ttf

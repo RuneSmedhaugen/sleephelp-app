@@ -32,7 +32,7 @@ class _StartupScreenState extends State<StartupScreen>
     _intro =
         AnimationController(
           vsync: this,
-          duration: const Duration(seconds: 10),
+          duration: const Duration(seconds: 5),
           animationBehavior: AnimationBehavior.preserve,
         )..addStatusListener((status) {
           if (status == AnimationStatus.completed) setState(() {});

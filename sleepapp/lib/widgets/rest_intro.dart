@@ -14,14 +14,32 @@ class RestIntro extends StatefulWidget {
 }
 
 class _RestIntroState extends State<RestIntro> {
+  static const _title = 'R.E.S.T';
+  static const _subtitle = 'Relaxing Environment, Sounds & Timer';
+
   final TextPainter _wordmark = TextPainter(
     text: const TextSpan(
-      text: 'REST',
+      text: _title,
       style: TextStyle(
-        color: Color(0xFFDDE3F1),
+        color: Colors.white,
+        fontFamily: 'Space Grotesk',
+        fontVariations: [ui.FontVariation('wght', 640)],
         fontSize: 96,
-        fontWeight: FontWeight.w600,
-        letterSpacing: 14,
+        letterSpacing: 8,
+      ),
+    ),
+    textDirection: TextDirection.ltr,
+  )..layout();
+
+  final TextPainter _fullName = TextPainter(
+    text: const TextSpan(
+      text: _subtitle,
+      style: TextStyle(
+        color: Color(0xFFBCC4D6),
+        fontFamily: 'Space Grotesk',
+        fontVariations: [ui.FontVariation('wght', 500)],
+        fontSize: 19,
+        letterSpacing: 0.9,
       ),
     ),
     textDirection: TextDirection.ltr,
@@ -30,6 +48,7 @@ class _RestIntroState extends State<RestIntro> {
   @override
   void dispose() {
     _wordmark.dispose();
+    _fullName.dispose();
     super.dispose();
   }
 
@@ -43,7 +62,7 @@ class _RestIntroState extends State<RestIntro> {
         systemNavigationBarDividerColor: Colors.black,
       ),
       child: Semantics(
-        label: 'REST, starting up',
+        label: '$_subtitle, starting up',
         image: true,
         child: RepaintBoundary(
           child: SizedBox.expand(
@@ -51,6 +70,7 @@ class _RestIntroState extends State<RestIntro> {
               painter: _RestIntroPainter(
                 widget.progress,
                 _wordmark,
+                _fullName,
                 reduceMotion,
               ),
               willChange: !reduceMotion,
@@ -63,11 +83,16 @@ class _RestIntroState extends State<RestIntro> {
 }
 
 class _RestIntroPainter extends CustomPainter {
-  _RestIntroPainter(this.progress, this.wordmark, this.reduceMotion)
-    : super(repaint: reduceMotion ? null : progress);
+  _RestIntroPainter(
+    this.progress,
+    this.wordmark,
+    this.fullName,
+    this.reduceMotion,
+  ) : super(repaint: reduceMotion ? null : progress);
 
   final Animation<double> progress;
   final TextPainter wordmark;
+  final TextPainter fullName;
   final bool reduceMotion;
 
   static final List<_Star> _stars = _makeStars();
@@ -90,14 +115,13 @@ class _RestIntroPainter extends CustomPainter {
   @override
   void paint(Canvas canvas, Size size) {
     canvas.drawRect(Offset.zero & size, Paint()..color = Colors.black);
+    if (size.isEmpty) return;
 
     final time = reduceMotion ? 1.0 : progress.value;
     final center = Offset(size.width / 2, size.height * 0.48);
     final field = math.min(size.width, size.height * 1.35);
-    final approach = Curves.easeOutCubic.transform(_phase(time, 0.07, 0.59));
-    final lightIn = Curves.easeInOutCubic.transform(_phase(time, 0.09, 0.59));
-    final settle = Curves.easeInOut.transform(_phase(time, 0.89, 1));
-    final light = lightIn * (1 - 0.23 * settle);
+    final approach = Curves.easeOutQuad.transform(time);
+    final light = _reveal(time);
     final spread = field * (0.83 + approach * 0.17);
 
     if (light > 0) {
@@ -128,10 +152,11 @@ class _RestIntroPainter extends CustomPainter {
       _paintStars(canvas, size, center, field, time, light);
     }
 
-    final opacity = Curves.easeInOut.transform(_phase(time, 0.12, 0.55));
+    final opacity = _reveal(_phase(time, 0.035, 1));
     if (opacity > 0) {
-      final width = math.min(field * 0.74, 404.0) * (0.66 + approach * 0.34);
-      _paintWordmark(canvas, center, width / wordmark.width, opacity, time);
+      final width = math.min(field * 0.80, 440.0) * (0.80 + approach * 0.20);
+      final scale = width / math.max(wordmark.width, fullName.width);
+      _paintBrand(canvas, center, scale, opacity, time);
     }
   }
 
@@ -177,7 +202,7 @@ class _RestIntroPainter extends CustomPainter {
       final delta = position - center;
       final distance = Offset(delta.dx / field, delta.dy / (field * 0.72));
       final exposure = math.exp(-5 * distance.distanceSquared);
-      final shimmer = 0.86 + 0.14 * math.sin(time * 7 + star.phase);
+      final shimmer = 0.93 + 0.07 * math.sin(time * 7 + star.phase);
       final alpha =
           light * (0.09 + 0.91 * exposure) * star.brightness * shimmer;
       final color = Color.lerp(
@@ -194,7 +219,7 @@ class _RestIntroPainter extends CustomPainter {
     }
   }
 
-  void _paintWordmark(
+  void _paintBrand(
     Canvas canvas,
     Offset center,
     double scale,
@@ -202,10 +227,18 @@ class _RestIntroPainter extends CustomPainter {
     double time,
   ) {
     final bounds = Offset.zero & wordmark.size;
+    final subtitleOffset = Offset(
+      (wordmark.width - fullName.width) / 2,
+      wordmark.height + 3,
+    );
+    final subtitleBounds = subtitleOffset & fullName.size;
+    final baseline = wordmark.computeDistanceToActualBaseline(
+      TextBaseline.alphabetic,
+    );
     canvas.save();
     canvas.translate(
       center.dx - bounds.width * scale / 2,
-      center.dy - bounds.height * scale / 2,
+      center.dy - subtitleBounds.bottom * scale / 2,
     );
     canvas.scale(scale);
     canvas.saveLayer(
@@ -213,21 +246,38 @@ class _RestIntroPainter extends CustomPainter {
       Paint()..color = Colors.white.withValues(alpha: opacity),
     );
     wordmark.paint(canvas, Offset.zero);
+    canvas.drawRect(
+      bounds,
+      Paint()
+        ..blendMode = BlendMode.srcIn
+        ..shader = ui.Gradient.linear(
+          Offset(0, baseline - 70),
+          Offset(0, baseline),
+          const [
+            Color(0xFFB1BDCE),
+            Color(0xFFF4F8FF),
+            Color(0xFF8B9AAF),
+            Color(0xFFCDD7E5),
+            Color(0xFF9EACC1),
+          ],
+          const [0, 0.25, 0.52, 0.80, 1],
+        ),
+    );
 
-    if (time > 0.68 && time < 0.92) {
-      final sweep = Curves.easeInOutSine.transform(_phase(time, 0.68, 0.92));
+    if (time > 0.68 && time < 1) {
+      final sweep = Curves.easeInOutSine.transform(_phase(time, 0.68, 1));
       final x = ui.lerpDouble(-62, bounds.width + 62, sweep)!;
       canvas.drawRect(
         bounds,
         Paint()
           ..blendMode = BlendMode.srcATop
           ..shader = ui.Gradient.linear(
-            Offset(x - 45, 31),
-            Offset(x + 45, 48),
+            Offset(x - 45, baseline - 55),
+            Offset(x + 45, baseline - 38),
             const [
               Color(0x00BFCCFF),
-              Color(0xFFC2D4FF),
-              Color(0xFFFFFFFF),
+              Color(0x66C2D4FF),
+              Color(0xA6FFFFFF),
               Color(0x00FFFFFF),
             ],
             const [0, 0.39, 0.57, 1],
@@ -236,8 +286,21 @@ class _RestIntroPainter extends CustomPainter {
     }
 
     canvas.restore();
+
+    final subtitleOpacity = _reveal(_phase(time, 0.11, 1));
+    canvas.saveLayer(
+      subtitleBounds,
+      Paint()..color = Colors.white.withValues(alpha: subtitleOpacity),
+    );
+    fullName.paint(canvas, subtitleOffset);
+    canvas.restore();
     canvas.restore();
   }
+
+  // Keep some opacity change in the last frames while making the reveal
+  // visible early enough to distinguish it from a blank loading screen.
+  static double _reveal(double time) =>
+      0.65 * time + 0.35 * Curves.easeInOutSine.transform(time);
 
   static double _phase(double time, double from, double to) =>
       ((time - from) / (to - from)).clamp(0.0, 1.0).toDouble();
@@ -246,6 +309,7 @@ class _RestIntroPainter extends CustomPainter {
   bool shouldRepaint(covariant _RestIntroPainter oldDelegate) =>
       oldDelegate.progress != progress ||
       oldDelegate.wordmark != wordmark ||
+      oldDelegate.fullName != fullName ||
       oldDelegate.reduceMotion != reduceMotion;
 }
 
