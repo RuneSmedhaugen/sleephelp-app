@@ -1,10 +1,11 @@
 import 'dart:async';
 import 'dart:convert';
 
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 import 'package:flutter/services.dart';
 
 import '../models/mix_rotation.dart';
+import '../models/rest_style.dart';
 import '../models/sound.dart';
 import '../models/sound_mix.dart';
 import '../services/audio_service.dart';
@@ -12,6 +13,7 @@ import '../services/imported_sound_storage.dart';
 import '../services/mix_rotation_storage.dart';
 import '../services/mix_storage.dart';
 import '../services/sleep_audio_handler.dart';
+import '../services/theme_storage.dart';
 import '../widgets/rest_intro.dart';
 import 'player_screen.dart';
 
@@ -53,15 +55,27 @@ class _StartupScreenState extends State<StartupScreen>
 
   Future<_StartupData> _load() async {
     try {
-      return await (
+      final (audio, sounds, mixes, rotation, _) = await (
         initializeSleepAudio(),
         _loadSounds(),
         _loadSavedMixes(),
         _loadRotation(),
+        _restoreTheme(),
       ).wait;
+      return (audio, sounds, mixes, rotation);
     } catch (error) {
       debugPrint('Could not start REST: $error');
       rethrow;
+    }
+  }
+
+  Future<void> _restoreTheme() async {
+    try {
+      final style = await ThemeStorage.load();
+      if (mounted) RestStyle.selected.value = style;
+    } catch (error) {
+      debugPrint('Could not restore theme: $error');
+      if (mounted) RestStyle.selected.value = RestStyle.all.first;
     }
   }
 

@@ -1,5 +1,6 @@
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 
+import '../models/rest_style.dart';
 import '../models/sound.dart';
 import 'sound_icon.dart';
 
@@ -19,13 +20,16 @@ class SoundLayerCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final style = RestStyle.of(context);
+    final accent = style.layerAccent(sound.category);
+    final sliderAccent = style.volumeAccent ?? accent;
     return Container(
       margin: const EdgeInsets.only(bottom: 10),
       padding: const EdgeInsets.fromLTRB(14, 12, 8, 8),
       decoration: BoxDecoration(
-        color: const Color(0xFF171D2D),
+        color: style.panel,
         borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: Colors.white.withValues(alpha: 0.055)),
+        border: Border.all(color: accent.withValues(alpha: 0.19)),
       ),
       child: Column(
         children: [
@@ -39,8 +43,8 @@ class SoundLayerCard extends StatelessWidget {
                   children: [
                     Text(
                       sound.name,
-                      style: const TextStyle(
-                        color: Color(0xFFF1F2F7),
+                      style: TextStyle(
+                        color: style.text,
                         fontWeight: FontWeight.w600,
                         fontSize: 15,
                       ),
@@ -48,10 +52,7 @@ class SoundLayerCard extends StatelessWidget {
                     const SizedBox(height: 2),
                     Text(
                       sound.category,
-                      style: const TextStyle(
-                        color: Color(0xFF8994AA),
-                        fontSize: 12,
-                      ),
+                      style: TextStyle(color: style.quaternary, fontSize: 12),
                     ),
                   ],
                 ),
@@ -60,21 +61,24 @@ class SoundLayerCard extends StatelessWidget {
                 tooltip: 'Remove ${sound.name}',
                 onPressed: onRemove,
                 icon: const Icon(Icons.close_rounded, size: 19),
-                color: const Color(0xFF929CB0),
+                color: style.quaternary,
                 visualDensity: VisualDensity.compact,
               ),
             ],
           ),
           Row(
             children: [
-              const Icon(
+              Icon(
                 Icons.volume_down_rounded,
                 size: 18,
-                color: Color(0xFF8994AA),
+                color: style.quaternary,
               ),
               Expanded(
                 child: SliderTheme(
                   data: SliderTheme.of(context).copyWith(
+                    activeTrackColor: sliderAccent,
+                    thumbColor: sliderAccent,
+                    overlayColor: sliderAccent.withValues(alpha: 0.15),
                     trackHeight: 3,
                     thumbShape: const RoundSliderThumbShape(
                       enabledThumbRadius: 6,
@@ -94,8 +98,8 @@ class SoundLayerCard extends StatelessWidget {
                 child: Text(
                   '${(volume * 100).round()}%',
                   textAlign: TextAlign.end,
-                  style: const TextStyle(
-                    color: Color(0xFF9AA4B8),
+                  style: TextStyle(
+                    color: style.quaternary,
                     fontSize: 11,
                     fontFeatures: [FontFeature.tabularFigures()],
                   ),

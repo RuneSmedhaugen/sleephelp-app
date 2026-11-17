@@ -1,19 +1,23 @@
 import 'dart:async';
 
 import 'package:audio_service/audio_service.dart';
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 
 import '../models/mix_rotation.dart';
+import '../models/rest_style.dart';
 import '../models/sound.dart';
 import '../models/sound_mix.dart';
 import '../services/imported_sound_storage.dart';
 import '../services/mix_rotation_storage.dart';
 import '../services/mix_storage.dart';
 import '../services/sleep_audio_handler.dart';
+import '../services/wake_alarms.dart';
 import '../widgets/sleep_timer_sheet.dart';
 import '../widgets/mix_rotation_sheet.dart';
 import 'library_view.dart';
+import 'alarms_view.dart';
 import 'saved_mixes_view.dart';
+import 'settings_view.dart';
 import 'sleep_home_view.dart';
 
 class PlayerScreen extends StatefulWidget {
@@ -40,6 +44,7 @@ class _PlayerScreenState extends State<PlayerScreen> {
   final MixStorage _mixStorage = MixStorage();
   final MixRotationStorage _rotationStorage = MixRotationStorage();
   final ImportedSoundStorage _importedSounds = ImportedSoundStorage();
+  final WakeAlarms _wakeAlarms = WakeAlarms();
   final Set<String> _busySounds = {};
   late List<Sound> _sounds;
   late List<SoundMix> _savedMixes;
@@ -52,6 +57,7 @@ class _PlayerScreenState extends State<PlayerScreen> {
   bool _switchingMix = false;
   bool _refreshRequested = false;
   bool _hadPlaybackSession = false;
+  int? _lastAlarmRing;
   StreamSubscription<PlaybackState>? _playbackSubscription;
   int _activeTab = 0;
   bool _isPlaying = false;
@@ -67,19 +73,65 @@ class _PlayerScreenState extends State<PlayerScreen> {
     _lastPlayedId = widget.lastPlayedId;
     _isPlaying = _audio.isPlaying;
     _hadPlaybackSession = _audio.hasPlaybackSession;
+    _audio.refreshAlarmSchedule = _wakeAlarms.refresh;
+    _wakeAlarms.addListener(_syncWakeAlarm);
     _playbackSubscription = _audio.playbackState.listen((state) {
       if (!mounted) return;
       setState(() => _isPlaying = state.playing);
       if (state.playing && !_switchingMix) _rememberPlayedMix();
       final hasSession = _audio.hasPlaybackSession;
+      _wakeAlarms.setPlaybackSession(hasSession);
       final sessionEnded = _hadPlaybackSession && !hasSession;
       _hadPlaybackSession = hasSession;
       if (sessionEnded) unawaited(_refreshDefaultMix());
     });
-    _lifecycle = AppLifecycleListener(onResume: _onCalendarCheck);
+    _lifecycle = AppLifecycleListener(
+      onResume: () {
+        _onCalendarCheck();
+        _wakeAlarms.resume();
+      },
+      onHide: _wakeAlarms.pause,
+    );
+    _wakeAlarms.resume();
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (mounted) _onCalendarCheck();
     });
+  }
+
+  void _syncWakeAlarm() {
+    if (!_wakeAlarms.ready || !mounted) return;
+    final ring = _wakeAlarms.lastRing;
+    final didRing =
+        _lastAlarmRing != null && ring > 0 && ring != _lastAlarmRing;
+    _lastAlarmRing = ring;
+    unawaited(
+      _audio.updateWakeAlarm(
+        _wakeAlarms.nextWake,
+        ringing: _wakeAlarms.ringingId != null,
+        didRing: didRing,
+      ),
+    );
+    setState(() {});
+  }
+
+  bool _canStartPlayback() {
+    if (!_wakeAlarms.ready) {
+      _showMessage(
+        'Could not check your alarm schedule. Try Play again in a moment.',
+      );
+      return false;
+    }
+    if (_wakeAlarms.ringingId != null) {
+      _showMessage('Stop or snooze the ringing alarm before pressing Play.');
+      return false;
+    }
+    if (!_audio.hasPlaybackSession && _audio.previewSleepPlan().blocked) {
+      _showMessage(
+        'The alarm’s planned stop time has passed. Choose the sleep timer to play tonight.',
+      );
+      return false;
+    }
+    return true;
   }
 
   void _onCalendarCheck() {
@@ -273,6 +325,8 @@ class _PlayerScreenState extends State<PlayerScreen> {
       if (_audio.isPlaying) {
         await _audio.pause();
       } else {
+        await _wakeAlarms.refresh();
+        if (!mounted || !_canStartPlayback()) return;
         await _refreshDefaultMix();
         if (!mounted) return;
         if (_audio.selectedSounds.isEmpty) {
@@ -333,7 +387,6 @@ class _PlayerScreenState extends State<PlayerScreen> {
     final name = await showDialog<String>(
       context: context,
       builder: (dialogContext) => AlertDialog(
-        backgroundColor: const Color(0xFF1A2031),
         title: const Text('Name this mix'),
         content: TextField(
           controller: controller,
@@ -380,6 +433,8 @@ class _PlayerScreenState extends State<PlayerScreen> {
     if (_switchingMix || _busySounds.isNotEmpty) return;
     _switchingMix = true;
     try {
+      await _wakeAlarms.refresh();
+      if (!mounted || !_canStartPlayback()) return;
       if (!await _loadMix(mix, onlyWhenIdle: false)) {
         _showMessage('This mix has no sounds in the current library.');
         return;
@@ -400,7 +455,6 @@ class _PlayerScreenState extends State<PlayerScreen> {
     final shouldDelete = await showDialog<bool>(
       context: context,
       builder: (dialogContext) => AlertDialog(
-        backgroundColor: const Color(0xFF1A2031),
         title: const Text('Delete saved mix?'),
         content: Text('“${mix.name}” will be removed from this device.'),
         actions: [
@@ -433,19 +487,33 @@ class _PlayerScreenState extends State<PlayerScreen> {
     await showModalBottomSheet<void>(
       context: context,
       isScrollControlled: true,
-      backgroundColor: const Color(0xFF111726),
       barrierColor: Colors.black.withValues(alpha: 0.62),
       shape: const RoundedRectangleBorder(
         borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
       ),
       builder: (sheetContext) => SleepTimerSheet(
-        initialState: _audio.sleepTimerState,
+        regularDuration: _audio.regularTimerDuration,
+        regularFade: _audio.regularTimerFade,
+        offersAlarmPlan: _audio.offersAlarmPlan,
+        usesRegularTimerTonight: _audio.usesRegularTimerTonight,
+        preview: (duration, fade, follow) => _audio.previewSleepPlan(
+          duration: duration,
+          fade: fade,
+          followAlarm: follow,
+        ),
+        onFollowAlarm: () async {
+          await _audio.followWakeAlarm();
+          if (mounted) setState(() {});
+          if (sheetContext.mounted) Navigator.pop(sheetContext);
+        },
         onStart: (duration, fadeOut) async {
           await _audio.startSleepTimer(duration: duration, fadeOut: fadeOut);
+          if (mounted) setState(() {});
           if (sheetContext.mounted) Navigator.pop(sheetContext);
         },
         onCancel: () async {
           await _audio.cancelSleepTimer();
+          if (mounted) setState(() {});
           if (sheetContext.mounted) Navigator.pop(sheetContext);
         },
       ),
@@ -457,11 +525,7 @@ class _PlayerScreenState extends State<PlayerScreen> {
     ScaffoldMessenger.of(context)
       ..hideCurrentSnackBar()
       ..showSnackBar(
-        SnackBar(
-          content: Text(message),
-          behavior: SnackBarBehavior.floating,
-          backgroundColor: const Color(0xFF293149),
-        ),
+        SnackBar(content: Text(message), behavior: SnackBarBehavior.floating),
       );
   }
 
@@ -469,12 +533,15 @@ class _PlayerScreenState extends State<PlayerScreen> {
   void dispose() {
     _dayChange?.cancel();
     _lifecycle.dispose();
+    _wakeAlarms.dispose();
+    _audio.refreshAlarmSchedule = null;
     _playbackSubscription?.cancel();
     super.dispose();
   }
 
   @override
   Widget build(BuildContext context) {
+    final style = RestStyle.of(context);
     final selected = _audio.selectedSounds;
     final pages = [
       SleepHomeView(
@@ -487,6 +554,7 @@ class _PlayerScreenState extends State<PlayerScreen> {
         mixName: _savedMix(_loadedMixId)?.name,
         timerState: _audio.sleepTimerState,
         timerStates: _audio.sleepTimerStates,
+        plannedTimer: _audio.previewSleepPlan(),
         onPlayPause: _togglePlayback,
         onStop: _stopPlayback,
         onTimer: _showTimer,
@@ -515,11 +583,29 @@ class _PlayerScreenState extends State<PlayerScreen> {
         rotationSummary: _rotationSummary,
         onRotation: _editRotation,
       ),
+      AlarmsView(alarms: _wakeAlarms),
+      const SettingsView(),
     ];
 
     return Scaffold(
-      backgroundColor: const Color(0xFF0D1220),
-      body: IndexedStack(index: _activeTab, children: pages),
+      backgroundColor: Theme.of(context).scaffoldBackgroundColor,
+      body: DecoratedBox(
+        decoration: BoxDecoration(
+          gradient: RadialGradient(
+            center: Alignment.topRight,
+            radius: 1.15,
+            colors: [style.backgroundHighlight, style.background],
+          ),
+        ),
+        child: Column(
+          children: [
+            RingingAlarmBanner(alarms: _wakeAlarms),
+            Expanded(
+              child: IndexedStack(index: _activeTab, children: pages),
+            ),
+          ],
+        ),
+      ),
       bottomNavigationBar: NavigationBar(
         selectedIndex: _activeTab,
         onDestinationSelected: (index) => setState(() => _activeTab = index),
@@ -538,6 +624,16 @@ class _PlayerScreenState extends State<PlayerScreen> {
             icon: Icon(Icons.bookmark_border_rounded),
             selectedIcon: Icon(Icons.bookmark_rounded),
             label: 'Saved',
+          ),
+          NavigationDestination(
+            icon: Icon(Icons.alarm_outlined),
+            selectedIcon: Icon(Icons.alarm_on_rounded),
+            label: 'Alarms',
+          ),
+          NavigationDestination(
+            icon: Icon(Icons.settings_outlined),
+            selectedIcon: Icon(Icons.settings_rounded),
+            label: 'Settings',
           ),
         ],
       ),

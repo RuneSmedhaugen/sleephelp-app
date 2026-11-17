@@ -4,6 +4,7 @@ import 'package:audio_service/audio_service.dart';
 import 'package:audio_session/audio_session.dart';
 import 'package:flutter/foundation.dart';
 
+import '../models/wake_playback.dart';
 import 'sleep_player.dart';
 
 /// The single source of truth for the active sound mix and its playback.
@@ -38,6 +39,7 @@ class SleepAudioHandler extends BaseAudioHandler {
   Future<void> _transportTail = Future<void>.value();
   Future<void> _volumeTail = Future<void>.value();
   Timer? _timerTicker;
+  Timer? _wallTicker;
   StreamSubscription<AudioInterruptionEvent>? _interruptionSubscription;
   StreamSubscription<void>? _becomingNoisySubscription;
 
@@ -52,6 +54,16 @@ class SleepAudioHandler extends BaseAudioHandler {
   Duration? _timerDuration;
   Duration _timerBaseElapsed = Duration.zero;
   Duration _fadeDuration = Duration.zero;
+  Duration? _regularDuration;
+  Duration _regularFade = Duration.zero;
+  WakePlayback? _nextWake;
+  bool _wakeRinging = false;
+  bool _useRegularTimerTonight = false;
+  DateTime? _wallStopAt;
+  DateTime? _wallAlarmAt;
+  bool _wallFollowsAlarm = false;
+  Duration _wallFade = Duration.zero;
+  Duration? _wallDuration;
   bool _timerCompleted = false;
   bool _timerTickInProgress = false;
   String? _lastError;
@@ -64,6 +76,80 @@ class SleepAudioHandler extends BaseAudioHandler {
   Map<String, double> get soundVolumes => Map.unmodifiable(_soundVolumes);
   Stream<SleepTimerState> get sleepTimerStates => _timerStates.stream;
   SleepTimerState get sleepTimerState => _currentTimerState();
+  Future<void> Function()? refreshAlarmSchedule;
+  Duration? get regularTimerDuration => _regularDuration;
+  Duration get regularTimerFade => _regularFade;
+  bool get usesRegularTimerTonight => _useRegularTimerTonight;
+  bool get offersAlarmPlan =>
+      _nextWake?.offersCustomPlan(DateTime.now()) ?? false;
+
+  SleepPlan previewSleepPlan({
+    Duration? duration,
+    Duration? fade,
+    bool? followAlarm,
+  }) {
+    final now = DateTime.now();
+    final wake = _nextWake;
+    final total = duration ?? _regularDuration;
+    final regularStop = total == null ? null : now.add(total);
+    final follows =
+        wake != null &&
+        wake.offersCustomPlan(now) &&
+        (followAlarm ?? !_useRegularTimerTonight);
+    final alarmAt = wake?.ringsAt;
+    final capped =
+        !follows &&
+        alarmAt != null &&
+        (regularStop == null || alarmAt.isBefore(regularStop));
+    final stop = follows ? wake.customStop : (capped ? alarmAt : regularStop);
+    final requestedFade = follows
+        ? wake.fade ?? Duration.zero
+        : fade ?? _regularFade;
+    final effectiveFade = _availableFade(requestedFade, stop?.difference(now));
+    return SleepPlan(
+      stopAt: stop,
+      alarmAt: alarmAt,
+      playFor: stop?.difference(now),
+      fade: effectiveFade,
+      fadeShortened: effectiveFade < requestedFade,
+      followsAlarm: follows,
+      cappedAtAlarm: capped,
+      timerShortened: capped && total != null,
+      blocked: _wakeRinging || (stop != null && !stop.isAfter(now)),
+    );
+  }
+
+  Future<void> updateWakeAlarm(
+    WakePlayback? next, {
+    required bool ringing,
+    required bool didRing,
+  }) {
+    _nextWake = next;
+    _wakeRinging = ringing;
+    if (ringing || didRing) _resumeAfterInterruption = false;
+    return _enqueueTransport(() async {
+      if (_disposed || !_hasPlaybackSession) return;
+      if (ringing || didRing || _timerExpired) {
+        await _completeSleepTimerNow(force: true);
+      } else if (next != null &&
+          (_wallStopAt == null || next.ringsAt.isBefore(_wallStopAt!))) {
+        _setWallStop(
+          next.ringsAt,
+          _wallStopAt == null ? _fadeDuration : _wallFade,
+          alarmAt: next.ringsAt,
+        );
+        _startTimerTicker();
+        _scheduleWallStop();
+        _publishTimerState();
+      }
+    });
+  }
+
+  Future<void> followWakeAlarm() => _enqueueTransport(() async {
+    _useRegularTimerTonight = false;
+    if (_hasPlaybackSession) await _applySleepPlan();
+    _publishTimerState();
+  });
 
   /// Add one looped sound. Concurrent requests for the same sound share one
   /// load operation, and a failed load always releases its player.
@@ -220,16 +306,10 @@ class SleepAudioHandler extends BaseAudioHandler {
       );
     }
 
-    _timerTicker?.cancel();
-    _timerStopwatch
-      ..stop()
-      ..reset();
-    _timerBaseElapsed = Duration.zero;
-    _timerDuration = duration;
-    _fadeDuration = fadeOut;
-    _timerCompleted = false;
-    await _setFadeGain(1.0);
-    if (_isPlaying) _resumeTimerClock();
+    _regularDuration = duration;
+    _regularFade = fadeOut;
+    _useRegularTimerTonight = offersAlarmPlan;
+    await _applySleepPlan();
     _publishTimerState();
   }
 
@@ -237,19 +317,29 @@ class SleepAudioHandler extends BaseAudioHandler {
       _enqueueTransport(_cancelSleepTimerAndApplyVolume);
 
   Future<void> _cancelSleepTimerAndApplyVolume() async {
-    _cancelSleepTimer(resetFade: true);
-    await _applyVolumesToAll();
+    _regularDuration = null;
+    _regularFade = Duration.zero;
+    _useRegularTimerTonight = offersAlarmPlan;
+    await _applySleepPlan();
+    _publishTimerState();
   }
 
   @override
-  Future<void> play() => _enqueueTransport(_play);
+  Future<void> play() {
+    final refresh = refreshAlarmSchedule;
+    return refresh == null
+        ? _enqueueTransport(_play)
+        : refresh().then((_) => _enqueueTransport(_play));
+  }
 
   Future<void> _play() async {
-    if (_disposed || _players.isEmpty) return;
-
-    if (_timerCompleted) {
-      _cancelSleepTimer(resetFade: true);
-      await _applyVolumesToAll();
+    if (_disposed || _players.isEmpty || _wakeRinging) return;
+    if (_hasPlaybackSession && _timerExpired) {
+      await _completeSleepTimerNow(force: true);
+      return;
+    }
+    if (!_hasPlaybackSession) {
+      if (!await _applySleepPlan() || _wakeRinging) return;
     }
 
     _lastError = null;
@@ -259,6 +349,7 @@ class SleepAudioHandler extends BaseAudioHandler {
     _isPlaying = true;
     _hasPlaybackSession = true;
     _resumeTimerClock();
+    _scheduleWallStop();
     _publishPlaybackState();
 
     for (final entry in _players.entries.toList()) {
@@ -294,9 +385,10 @@ class SleepAudioHandler extends BaseAudioHandler {
     _playIntent = false;
     _isPlaying = false;
     _hasPlaybackSession = false;
+    await _runForAll((_, player) => _stopAndRewind(player));
+    _useRegularTimerTonight = false;
     _cancelSleepTimer(resetFade: true);
     await _applyVolumesToAll();
-    await _runForAll((_, player) => _stopAndRewind(player));
     _pauseRequested = false;
     await super.stop();
     _publishPlaybackState();
@@ -336,6 +428,7 @@ class SleepAudioHandler extends BaseAudioHandler {
   }
 
   void _requestPlay(SleepPlayer player, String file) {
+    if (_wakeRinging || _timerExpired) return;
     // just_audio's play future completes when playback ends. Do not await a
     // future that is expected to remain pending for a looping sound.
     unawaited(
@@ -458,8 +551,13 @@ class SleepAudioHandler extends BaseAudioHandler {
       unawaited(_applyInterruptionGain(1.0));
     } else if (event.type == AudioInterruptionType.pause &&
         _resumeAfterInterruption) {
-      _resumeAfterInterruption = false;
-      unawaited(play());
+      unawaited(
+        _enqueueTransport(() async {
+          if (!_resumeAfterInterruption || !_hasPlaybackSession) return;
+          _resumeAfterInterruption = false;
+          await _play();
+        }),
+      );
     } else {
       _resumeAfterInterruption = false;
     }
@@ -492,17 +590,116 @@ class SleepAudioHandler extends BaseAudioHandler {
     await _applyVolumesToAll();
   }
 
-  void _resumeTimerClock() {
-    if (_timerDuration == null ||
-        _timerCompleted ||
-        _timerStopwatch.isRunning) {
+  Future<bool> _applySleepPlan() async {
+    final plan = previewSleepPlan();
+    if (plan.blocked) {
+      if (_hasPlaybackSession) await _completeSleepTimerNow(force: true);
+      return false;
+    }
+    _cancelSleepTimer(resetFade: false);
+    _timerDuration = plan.followsAlarm ? null : _regularDuration;
+    _fadeDuration = plan.followsAlarm ? Duration.zero : _regularFade;
+    final wallStop = plan.followsAlarm ? plan.stopAt : plan.alarmAt;
+    final alarmAt = plan.alarmAt;
+    if (wallStop != null && alarmAt != null) {
+      _setWallStop(
+        wallStop,
+        plan.followsAlarm ? plan.fade : _regularFade,
+        alarmAt: alarmAt,
+        followsAlarm: plan.followsAlarm,
+      );
+    }
+    await _setFadeGain(1.0);
+    if (_isPlaying) _resumeTimerClock();
+    if (_hasPlaybackSession) _startTimerTicker();
+    if (_hasPlaybackSession) _scheduleWallStop();
+    return true;
+  }
+
+  static Duration _availableFade(Duration requested, Duration? remaining) {
+    if (remaining == null || requested <= remaining) return requested;
+    return remaining.isNegative ? Duration.zero : remaining;
+  }
+
+  void _setWallStop(
+    DateTime stop,
+    Duration fade, {
+    required DateTime alarmAt,
+    bool followsAlarm = false,
+  }) {
+    _wallStopAt = stop;
+    _wallAlarmAt = alarmAt;
+    _wallFollowsAlarm = followsAlarm;
+    final remaining = stop.difference(DateTime.now());
+    _wallDuration = remaining > Duration.zero ? remaining : _timerTickInterval;
+    _wallFade = _availableFade(fade, remaining);
+  }
+
+  ({Duration remaining, Duration duration, Duration fade, bool usesWallClock})?
+  _effectiveTimer() {
+    final regular = _timerDuration;
+    // A paused duration timer keeps its remaining play time. The alarm's
+    // countdown still uses wall time and can become the earlier cutoff.
+    final regularRemaining = regular == null ? null : regular - _elapsedTimer();
+    final wallRemaining = _wallStopAt?.difference(DateTime.now());
+    if (wallRemaining != null &&
+        (regularRemaining == null || wallRemaining <= regularRemaining)) {
+      return (
+        remaining: wallRemaining,
+        duration: _wallDuration!,
+        fade: _wallFade,
+        usesWallClock: true,
+      );
+    }
+    if (regular == null || regularRemaining == null) return null;
+    return (
+      remaining: regularRemaining,
+      duration: regular,
+      fade: _fadeDuration,
+      usesWallClock: false,
+    );
+  }
+
+  bool get _timerExpired =>
+      (_effectiveTimer()?.remaining ?? const Duration(days: 1)) <=
+      Duration.zero;
+
+  void _scheduleWallStop() {
+    _wallTicker?.cancel();
+    final stop = _wallStopAt;
+    if (stop == null) return;
+    _wallTicker = Timer(stop.difference(DateTime.now()), () {
+      unawaited(
+        _enqueueTransport(() async {
+          if (!_hasPlaybackSession || _wallStopAt != stop) return;
+          if (_timerExpired) {
+            await _completeSleepTimerNow();
+          } else {
+            _scheduleWallStop();
+          }
+        }),
+      );
+    });
+  }
+
+  void _startTimerTicker() {
+    if (_timerCompleted ||
+        (!_timerStopwatch.isRunning && _wallStopAt == null)) {
       return;
     }
-    _timerStopwatch.start();
     _timerTicker ??= Timer.periodic(
       _timerTickInterval,
       (_) => unawaited(_tickSleepTimer()),
     );
+  }
+
+  void _resumeTimerClock() {
+    if (_timerDuration != null &&
+        !_timerCompleted &&
+        !_timerStopwatch.isRunning) {
+      _timerStopwatch.start();
+    }
+    _startTimerTicker();
     _publishTimerState();
   }
 
@@ -512,31 +709,33 @@ class SleepAudioHandler extends BaseAudioHandler {
     _timerStopwatch
       ..stop()
       ..reset();
-    _timerTicker?.cancel();
-    _timerTicker = null;
+    if (_wallStopAt == null) {
+      _timerTicker?.cancel();
+      _timerTicker = null;
+    }
     _publishTimerState();
   }
 
   Future<void> _tickSleepTimer() async {
     if (_timerTickInProgress) return;
-    final duration = _timerDuration;
-    if (duration == null || _timerCompleted || !_timerStopwatch.isRunning) {
+    if (_timerCompleted || !_hasPlaybackSession) {
       return;
     }
+    final timer = _effectiveTimer();
+    if (timer == null) return;
 
     _timerTickInProgress = true;
     try {
-      final elapsed = _elapsedTimer();
-      final remaining = duration - elapsed;
+      final remaining = timer.remaining;
       if (remaining <= Duration.zero) {
         await _completeSleepTimer();
         return;
       }
 
-      if (_fadeDuration > Duration.zero && remaining <= _fadeDuration) {
-        final progress =
-            remaining.inMicroseconds / _fadeDuration.inMicroseconds;
-        await _setFadeGain(progress * progress);
+      if (timer.fade > Duration.zero && remaining <= timer.fade) {
+        final progress = remaining.inMicroseconds / timer.fade.inMicroseconds;
+        final gain = progress * progress;
+        if (gain < _fadeGain) await _setFadeGain(gain);
       }
       _publishTimerState();
     } finally {
@@ -545,20 +744,23 @@ class SleepAudioHandler extends BaseAudioHandler {
   }
 
   Future<void> _completeSleepTimer() =>
-      _enqueueTransport(_completeSleepTimerNow);
+      _enqueueTransport(() => _completeSleepTimerNow());
 
-  Future<void> _completeSleepTimerNow() async {
-    final duration = _timerDuration;
-    if (duration == null || _timerCompleted || _elapsedTimer() < duration) {
+  Future<void> _completeSleepTimerNow({bool force = false}) async {
+    if (_timerCompleted || !_hasPlaybackSession || (!force && !_timerExpired)) {
       return;
     }
     _timerTicker?.cancel();
     _timerTicker = null;
+    _wallTicker?.cancel();
+    _wallTicker = null;
     _timerStopwatch
       ..stop()
       ..reset();
     _timerBaseElapsed = _timerDuration ?? Duration.zero;
     _timerCompleted = true;
+    _resumeAfterInterruption = false;
+    _useRegularTimerTonight = false;
     _playIntent = false;
     _isPlaying = false;
     _hasPlaybackSession = false;
@@ -572,15 +774,23 @@ class SleepAudioHandler extends BaseAudioHandler {
   Duration _elapsedTimer() => _timerBaseElapsed + _timerStopwatch.elapsed;
 
   SleepTimerState _currentTimerState() {
-    final duration = _timerDuration;
-    if (duration == null) return const SleepTimerState.inactive();
-    final remaining = duration - _elapsedTimer();
+    final timer = _effectiveTimer();
+    if (timer == null) return const SleepTimerState.inactive();
+    final remaining = timer.remaining;
     return SleepTimerState(
-      duration: duration,
-      remaining: remaining.isNegative ? Duration.zero : remaining,
-      fadeOut: _fadeDuration,
-      isRunning: _timerStopwatch.isRunning,
+      duration: timer.duration,
+      remaining: _timerCompleted || remaining.isNegative
+          ? Duration.zero
+          : remaining,
+      fadeOut: timer.fade,
+      isRunning:
+          !_timerCompleted &&
+          (timer.usesWallClock
+              ? _hasPlaybackSession
+              : _timerStopwatch.isRunning),
       isCompleted: _timerCompleted,
+      alarmAt: timer.usesWallClock ? _wallAlarmAt : null,
+      followsAlarm: timer.usesWallClock && _wallFollowsAlarm,
     );
   }
 
@@ -591,12 +801,19 @@ class SleepAudioHandler extends BaseAudioHandler {
   void _cancelSleepTimer({required bool resetFade}) {
     _timerTicker?.cancel();
     _timerTicker = null;
+    _wallTicker?.cancel();
+    _wallTicker = null;
     _timerStopwatch
       ..stop()
       ..reset();
     _timerDuration = null;
     _timerBaseElapsed = Duration.zero;
     _fadeDuration = Duration.zero;
+    _wallStopAt = null;
+    _wallAlarmAt = null;
+    _wallFollowsAlarm = false;
+    _wallDuration = null;
+    _wallFade = Duration.zero;
     _timerCompleted = false;
     if (resetFade) _fadeGain = 1.0;
     _publishTimerState();
@@ -627,7 +844,7 @@ class SleepAudioHandler extends BaseAudioHandler {
   }
 }
 
-/// Observable sleep timer state for the future player views.
+/// The countdown currently governing playback.
 class SleepTimerState {
   const SleepTimerState({
     required this.duration,
@@ -635,6 +852,8 @@ class SleepTimerState {
     required this.fadeOut,
     required this.isRunning,
     required this.isCompleted,
+    this.alarmAt,
+    this.followsAlarm = false,
   });
 
   const SleepTimerState.inactive()
@@ -642,13 +861,22 @@ class SleepTimerState {
       remaining = Duration.zero,
       fadeOut = Duration.zero,
       isRunning = false,
-      isCompleted = false;
+      isCompleted = false,
+      alarmAt = null,
+      followsAlarm = false;
 
   final Duration? duration;
   final Duration remaining;
   final Duration fadeOut;
   final bool isRunning;
   final bool isCompleted;
+  final DateTime? alarmAt;
+  final bool followsAlarm;
 
   bool get isActive => duration != null;
+  Duration? get untilFade {
+    if (!isActive || isCompleted || fadeOut <= Duration.zero) return null;
+    final remainingUntilFade = remaining - fadeOut;
+    return remainingUntilFade.isNegative ? Duration.zero : remainingUntilFade;
+  }
 }

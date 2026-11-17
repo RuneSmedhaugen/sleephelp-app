@@ -1,16 +1,29 @@
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 
-import '../services/sleep_audio_handler.dart';
+import '../models/rest_style.dart';
+import '../models/wake_playback.dart';
+import 'sleep_plan_text.dart';
 
 class SleepTimerSheet extends StatefulWidget {
   const SleepTimerSheet({
     super.key,
-    required this.initialState,
+    required this.regularDuration,
+    required this.regularFade,
+    required this.offersAlarmPlan,
+    required this.usesRegularTimerTonight,
+    required this.preview,
+    required this.onFollowAlarm,
     required this.onStart,
     required this.onCancel,
   });
 
-  final SleepTimerState initialState;
+  final Duration? regularDuration;
+  final Duration regularFade;
+  final bool offersAlarmPlan;
+  final bool usesRegularTimerTonight;
+  final SleepPlan Function(Duration duration, Duration fade, bool follow)
+  preview;
+  final Future<void> Function() onFollowAlarm;
   final Future<void> Function(Duration duration, Duration fadeOut) onStart;
   final Future<void> Function() onCancel;
 
@@ -25,15 +38,16 @@ class _SleepTimerSheetState extends State<SleepTimerSheet> {
   late int _durationMinutes;
   late int _fadeMinutes;
   bool _saving = false;
+  late bool _followAlarm;
 
   @override
   void initState() {
     super.initState();
-    final current = widget.initialState;
-    _durationMinutes = current.isActive && current.duration != null
-        ? current.duration!.inMinutes
-        : 45;
-    _fadeMinutes = current.isActive ? current.fadeOut.inMinutes : 5;
+    _durationMinutes = widget.regularDuration?.inMinutes ?? 45;
+    _fadeMinutes = widget.regularDuration == null
+        ? 5
+        : widget.regularFade.inMinutes;
+    _followAlarm = widget.offersAlarmPlan && !widget.usesRegularTimerTonight;
     if (!_durations.contains(_durationMinutes)) _durationMinutes = 45;
     _clampFade();
   }
@@ -48,10 +62,14 @@ class _SleepTimerSheetState extends State<SleepTimerSheet> {
   Future<void> _start() async {
     setState(() => _saving = true);
     try {
-      await widget.onStart(
-        Duration(minutes: _durationMinutes),
-        Duration(minutes: _fadeMinutes),
-      );
+      if (_followAlarm) {
+        await widget.onFollowAlarm();
+      } else {
+        await widget.onStart(
+          Duration(minutes: _durationMinutes),
+          Duration(minutes: _fadeMinutes),
+        );
+      }
     } finally {
       if (mounted) setState(() => _saving = false);
     }
@@ -68,8 +86,14 @@ class _SleepTimerSheetState extends State<SleepTimerSheet> {
 
   @override
   Widget build(BuildContext context) {
+    final style = RestStyle.of(context);
     final bottomInset = MediaQuery.viewInsetsOf(context).bottom;
-    return Padding(
+    final plan = widget.preview(
+      Duration(minutes: _durationMinutes),
+      Duration(minutes: _fadeMinutes),
+      _followAlarm,
+    );
+    return SingleChildScrollView(
       padding: EdgeInsets.fromLTRB(22, 10, 22, 22 + bottomInset),
       child: Column(
         mainAxisSize: MainAxisSize.min,
@@ -80,85 +104,99 @@ class _SleepTimerSheetState extends State<SleepTimerSheet> {
               width: 38,
               height: 4,
               decoration: BoxDecoration(
-                color: const Color(0xFF5D667A),
+                color: style.quaternary,
                 borderRadius: BorderRadius.circular(4),
               ),
             ),
           ),
           const SizedBox(height: 25),
-          const Text(
+          Text(
             'Sleep timer',
             style: TextStyle(
-              color: Color(0xFFF1F2F7),
+              color: style.text,
               fontSize: 23,
               fontWeight: FontWeight.w600,
               letterSpacing: -0.4,
             ),
           ),
           const SizedBox(height: 6),
-          const Text(
-            'Your mix fades out before it stops.',
-            style: TextStyle(color: Color(0xFF929DB2), fontSize: 13),
-          ),
-          const SizedBox(height: 24),
-          const _TimerLabel('PLAY FOR'),
-          const SizedBox(height: 11),
-          Wrap(
-            spacing: 8,
-            runSpacing: 8,
-            children: [
-              for (final minutes in _durations)
+          if (widget.offersAlarmPlan) ...[
+            Wrap(
+              spacing: 8,
+              runSpacing: 4,
+              children: [
                 _TimerChoice(
-                  label: '$minutes min',
-                  selected: _durationMinutes == minutes,
-                  onTap: () => setState(() {
-                    _durationMinutes = minutes;
-                    _clampFade();
-                  }),
+                  label: 'Follow alarm',
+                  selected: _followAlarm,
+                  onTap: () => setState(() => _followAlarm = true),
                 ),
-            ],
-          ),
-          const SizedBox(height: 23),
-          const _TimerLabel('FADE OVER'),
-          const SizedBox(height: 11),
-          Wrap(
-            spacing: 8,
-            runSpacing: 8,
-            children: [
-              for (final minutes in _fades.where(
-                (minutes) => minutes <= _durationMinutes,
-              ))
                 _TimerChoice(
-                  label: minutes == 0 ? 'No fade' : '$minutes min',
-                  selected: _fadeMinutes == minutes,
-                  onTap: () => setState(() => _fadeMinutes = minutes),
+                  label: 'Sleep timer tonight',
+                  selected: !_followAlarm,
+                  onTap: () => setState(() => _followAlarm = false),
                 ),
-            ],
-          ),
+              ],
+            ),
+          ],
+          if (!_followAlarm) ...[
+            const SizedBox(height: 24),
+            const _TimerLabel('PLAY FOR'),
+            const SizedBox(height: 11),
+            Wrap(
+              spacing: 8,
+              runSpacing: 8,
+              children: [
+                for (final minutes in _durations)
+                  _TimerChoice(
+                    label: '$minutes min',
+                    selected: _durationMinutes == minutes,
+                    onTap: () => setState(() {
+                      _durationMinutes = minutes;
+                      _clampFade();
+                    }),
+                  ),
+              ],
+            ),
+            const SizedBox(height: 23),
+            const _TimerLabel('FADE OVER'),
+            const SizedBox(height: 11),
+            Wrap(
+              spacing: 8,
+              runSpacing: 8,
+              children: [
+                for (final minutes in _fades.where(
+                  (minutes) => minutes <= _durationMinutes,
+                ))
+                  _TimerChoice(
+                    label: minutes == 0 ? 'No fade' : '$minutes min',
+                    selected: _fadeMinutes == minutes,
+                    onTap: () => setState(() => _fadeMinutes = minutes),
+                  ),
+              ],
+            ),
+          ],
           const SizedBox(height: 13),
           Container(
             width: double.infinity,
             padding: const EdgeInsets.all(13),
             decoration: BoxDecoration(
-              color: const Color(0xFF1A2132),
+              color: style.raised,
               borderRadius: BorderRadius.circular(15),
             ),
             child: Text(
-              _fadeMinutes == 0
-                  ? 'Sound stops after $_durationMinutes minutes.'
-                  : 'Sound fades over the last $_fadeMinutes minutes, then stops.',
-              style: const TextStyle(
-                color: Color(0xFFB8C1D1),
-                fontSize: 12,
-                height: 1.35,
-              ),
+              describeSleepPlan(context, plan),
+              style: TextStyle(color: style.text, fontSize: 12, height: 1.35),
             ),
           ),
           const SizedBox(height: 19),
           SizedBox(
             width: double.infinity,
             child: FilledButton(
-              onPressed: _saving ? null : _start,
+              onPressed: _saving || plan.blocked ? null : _start,
+              style: FilledButton.styleFrom(
+                backgroundColor: style.secondary,
+                foregroundColor: style.onAccent,
+              ),
               child: Padding(
                 padding: const EdgeInsets.symmetric(vertical: 13),
                 child: _saving
@@ -167,18 +205,17 @@ class _SleepTimerSheetState extends State<SleepTimerSheet> {
                         height: 18,
                         child: CircularProgressIndicator(strokeWidth: 2),
                       )
-                    : const Text('Start timer'),
+                    : Text(_followAlarm ? 'Follow alarm' : 'Set sleep timer'),
               ),
             ),
           ),
-          if (widget.initialState.isActive &&
-              !widget.initialState.isCompleted) ...[
+          if (!_followAlarm && widget.regularDuration != null) ...[
             const SizedBox(height: 7),
             SizedBox(
               width: double.infinity,
               child: TextButton(
                 onPressed: _saving ? null : _cancel,
-                child: const Text('Cancel timer'),
+                child: const Text('Turn off sleep timer'),
               ),
             ),
           ],
@@ -193,15 +230,18 @@ class _TimerLabel extends StatelessWidget {
   final String label;
 
   @override
-  Widget build(BuildContext context) => Text(
-    label,
-    style: const TextStyle(
-      color: Color(0xFF8792A8),
-      fontSize: 10,
-      letterSpacing: 1.4,
-      fontWeight: FontWeight.w700,
-    ),
-  );
+  Widget build(BuildContext context) {
+    final style = RestStyle.of(context);
+    return Text(
+      label,
+      style: TextStyle(
+        color: style.quaternary,
+        fontSize: 10,
+        letterSpacing: 1.4,
+        fontWeight: FontWeight.w700,
+      ),
+    );
+  }
 }
 
 class _TimerChoice extends StatelessWidget {
@@ -216,22 +256,25 @@ class _TimerChoice extends StatelessWidget {
   final VoidCallback onTap;
 
   @override
-  Widget build(BuildContext context) => ChoiceChip(
-    label: Text(label),
-    selected: selected,
-    showCheckmark: false,
-    onSelected: (_) => onTap(),
-    labelStyle: TextStyle(
-      color: selected ? const Color(0xFFEAE7FF) : const Color(0xFF9BA5B8),
-      fontSize: 12,
-    ),
-    backgroundColor: const Color(0xFF171D2D),
-    selectedColor: const Color(0xFF34304E),
-    side: BorderSide(
-      color: selected
-          ? const Color(0xFF8274B8).withValues(alpha: 0.58)
-          : Colors.white.withValues(alpha: 0.05),
-    ),
-    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(22)),
-  );
+  Widget build(BuildContext context) {
+    final style = RestStyle.of(context);
+    return ChoiceChip(
+      label: Text(label),
+      selected: selected,
+      showCheckmark: false,
+      onSelected: (_) => onTap(),
+      labelStyle: TextStyle(
+        color: selected ? style.text : style.quaternary,
+        fontSize: 12,
+      ),
+      backgroundColor: style.panel,
+      selectedColor: style.tint(style.secondary, 0.22),
+      side: BorderSide(
+        color: selected
+            ? style.secondary.withValues(alpha: 0.58)
+            : style.outline,
+      ),
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(22)),
+    );
+  }
 }

@@ -1,5 +1,6 @@
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 
+import 'models/rest_style.dart';
 import 'screens/startup_screen.dart';
 
 void main() {
@@ -11,62 +12,93 @@ class SleepApp extends StatelessWidget {
   const SleepApp({super.key});
 
   @override
-  Widget build(BuildContext context) {
-    return MaterialApp(
-      title: 'REST',
-      debugShowCheckedModeBanner: false,
-      theme: ThemeData(
-        colorScheme:
-            ColorScheme.fromSeed(
-              seedColor: const Color(0xFFB4A8EC),
-              brightness: Brightness.dark,
-            ).copyWith(
-              surface: const Color(0xFF111726),
-              primary: const Color(0xFFB4A8EC),
-              secondary: const Color(0xFF9ED9CC),
+  Widget build(BuildContext context) => ValueListenableBuilder<RestStyle>(
+    valueListenable: RestStyle.selected,
+    builder: (context, style, _) {
+      return MaterialApp(
+        title: 'REST',
+        debugShowCheckedModeBanner: false,
+        theme: ThemeData(
+          colorScheme:
+              ColorScheme.fromSeed(
+                seedColor: style.primary,
+                brightness: Brightness.dark,
+              ).copyWith(
+                surface: style.surface,
+                onSurface: style.text,
+                onSurfaceVariant: style.quaternary,
+                surfaceContainer: style.panel,
+                surfaceContainerHigh: style.raised,
+                primary: style.primary,
+                onPrimary: style.onAccent,
+                secondaryContainer: style.tint(style.secondary, 0.19),
+                onSecondaryContainer: style.text,
+                secondary: style.secondary,
+                tertiary: style.tertiary,
+              ),
+          scaffoldBackgroundColor: style.background,
+          extensions: [style],
+          cardTheme: CardThemeData(
+            color: style.panel,
+            surfaceTintColor: Colors.transparent,
+          ),
+          dialogTheme: DialogThemeData(backgroundColor: style.raised),
+          bottomSheetTheme: BottomSheetThemeData(
+            backgroundColor: style.surface,
+          ),
+          snackBarTheme: SnackBarThemeData(
+            backgroundColor: style.raised,
+            contentTextStyle: TextStyle(color: style.text),
+          ),
+          useMaterial3: true,
+          navigationBarTheme: NavigationBarThemeData(
+            backgroundColor: style.surface,
+            indicatorColor: style.primary.withValues(alpha: 0.24),
+            elevation: 0,
+            iconTheme: WidgetStateProperty.resolveWith((states) {
+              return IconThemeData(
+                color: states.contains(WidgetState.selected)
+                    ? style.primary
+                    : style.quaternary,
+              );
+            }),
+            labelTextStyle: WidgetStateProperty.resolveWith((states) {
+              final selected = states.contains(WidgetState.selected);
+              return TextStyle(
+                fontSize: 11,
+                fontWeight: selected ? FontWeight.w600 : FontWeight.w400,
+                color: selected ? style.text : style.quaternary,
+              );
+            }),
+          ),
+          sliderTheme: SliderThemeData(
+            activeTrackColor: style.volumeAccent ?? style.primary,
+            inactiveTrackColor: style.quaternary.withValues(alpha: 0.35),
+            thumbColor: style.volumeAccent ?? style.secondary,
+            overlayColor: (style.volumeAccent ?? style.primary).withValues(
+              alpha: 0.2,
             ),
-        scaffoldBackgroundColor: const Color(0xFF0D1220),
-        useMaterial3: true,
-        navigationBarTheme: NavigationBarThemeData(
-          backgroundColor: const Color(0xFF111726),
-          indicatorColor: const Color(0xFF393452),
-          elevation: 0,
-          labelTextStyle: WidgetStateProperty.resolveWith((states) {
-            final selected = states.contains(WidgetState.selected);
-            return TextStyle(
-              fontSize: 11,
-              fontWeight: selected ? FontWeight.w600 : FontWeight.w400,
-              color: selected
-                  ? const Color(0xFFE5E0FF)
-                  : const Color(0xFF8994AA),
-            );
-          }),
-        ),
-        sliderTheme: const SliderThemeData(
-          activeTrackColor: Color(0xFFB4A8EC),
-          inactiveTrackColor: Color(0xFF353D51),
-          thumbColor: Color(0xFFD2C9FF),
-          overlayColor: Color(0x33B4A8EC),
-        ),
-        inputDecorationTheme: InputDecorationTheme(
-          filled: true,
-          fillColor: const Color(0xFF171D2D),
-          hintStyle: const TextStyle(color: Color(0xFF7F8BA1)),
-          border: OutlineInputBorder(
-            borderRadius: BorderRadius.circular(16),
-            borderSide: BorderSide.none,
           ),
-          enabledBorder: OutlineInputBorder(
-            borderRadius: BorderRadius.circular(16),
-            borderSide: BorderSide.none,
-          ),
-          focusedBorder: OutlineInputBorder(
-            borderRadius: BorderRadius.circular(16),
-            borderSide: const BorderSide(color: Color(0xFF8E82C5)),
+          inputDecorationTheme: InputDecorationTheme(
+            filled: true,
+            fillColor: style.surface,
+            hintStyle: TextStyle(color: style.quaternary),
+            border: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(16),
+              borderSide: BorderSide.none,
+            ),
+            enabledBorder: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(16),
+              borderSide: BorderSide.none,
+            ),
+            focusedBorder: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(16),
+              borderSide: BorderSide(color: style.primary),
+            ),
           ),
         ),
-      ),
-      home: const StartupScreen(),
-    );
-  }
+        home: const StartupScreen(),
+      );
+    },
+  );
 }

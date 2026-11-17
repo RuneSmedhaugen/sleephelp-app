@@ -1,6 +1,7 @@
 import 'package:flutter/foundation.dart';
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 
+import '../models/rest_style.dart';
 import '../models/sound.dart';
 import '../widgets/sound_icon.dart';
 
@@ -55,6 +56,7 @@ class _LibraryViewState extends State<LibraryView> {
 
   @override
   Widget build(BuildContext context) {
+    final style = RestStyle.of(context);
     final query = _searchController.text.trim().toLowerCase();
     final visibleSounds = widget.sounds.where((sound) {
       final matchesCategory = _category == 'All' || sound.category == _category;
@@ -74,11 +76,11 @@ class _LibraryViewState extends State<LibraryView> {
               children: [
                 Row(
                   children: [
-                    const Expanded(
+                    Expanded(
                       child: Text(
                         'Find your calm',
                         style: TextStyle(
-                          color: Color(0xFFF1F2F7),
+                          color: style.text,
                           fontSize: 27,
                           fontWeight: FontWeight.w600,
                           letterSpacing: -0.7,
@@ -101,9 +103,9 @@ class _LibraryViewState extends State<LibraryView> {
                   ],
                 ),
                 const SizedBox(height: 6),
-                const Text(
+                Text(
                   'Layer a few sounds together to make your own.',
-                  style: TextStyle(color: Color(0xFF929DB2), fontSize: 13),
+                  style: TextStyle(color: style.quaternary, fontSize: 13),
                 ),
                 const SizedBox(height: 18),
                 TextField(
@@ -124,9 +126,9 @@ class _LibraryViewState extends State<LibraryView> {
                             icon: const Icon(Icons.close_rounded),
                           ),
                     filled: true,
-                    fillColor: const Color(0xFF171D2D),
-                    hintStyle: const TextStyle(color: Color(0xFF7F8BA1)),
-                    prefixIconColor: const Color(0xFF98A3B8),
+                    fillColor: style.panel,
+                    hintStyle: TextStyle(color: style.quaternary),
+                    prefixIconColor: style.quaternary,
                     contentPadding: const EdgeInsets.symmetric(vertical: 13),
                     border: OutlineInputBorder(
                       borderRadius: BorderRadius.circular(17),
@@ -150,19 +152,17 @@ class _LibraryViewState extends State<LibraryView> {
                         onSelected: (_) => setState(() => _category = category),
                         showCheckmark: false,
                         labelStyle: TextStyle(
-                          color: selected
-                              ? const Color(0xFFEAE7FF)
-                              : const Color(0xFF9BA5B8),
+                          color: selected ? style.text : style.quaternary,
                           fontSize: 12,
                           fontWeight: selected
                               ? FontWeight.w600
                               : FontWeight.w400,
                         ),
-                        backgroundColor: const Color(0xFF171D2D),
-                        selectedColor: const Color(0xFF34304E),
+                        backgroundColor: style.panel,
+                        selectedColor: style.tint(style.primary, 0.22),
                         side: BorderSide(
                           color: selected
-                              ? const Color(0xFF7569A9).withValues(alpha: 0.55)
+                              ? style.primary.withValues(alpha: 0.55)
                               : Colors.white.withValues(alpha: 0.045),
                         ),
                         shape: RoundedRectangleBorder(
@@ -178,19 +178,13 @@ class _LibraryViewState extends State<LibraryView> {
                   children: [
                     Text(
                       '${visibleSounds.length} sounds',
-                      style: const TextStyle(
-                        color: Color(0xFF8792A8),
-                        fontSize: 12,
-                      ),
+                      style: TextStyle(color: style.quaternary, fontSize: 12),
                     ),
                     const Spacer(),
                     if (widget.selectedSounds.isNotEmpty)
                       Text(
                         '${widget.selectedSounds.length} in your mix',
-                        style: const TextStyle(
-                          color: Color(0xFFB7ACEF),
-                          fontSize: 12,
-                        ),
+                        style: TextStyle(color: style.primary, fontSize: 12),
                       ),
                   ],
                 ),
@@ -205,7 +199,7 @@ class _LibraryViewState extends State<LibraryView> {
                       _category == Sound.importedCategory && query.isEmpty
                           ? 'Use Import to add your own sounds.'
                           : 'No sounds match that search.',
-                      style: const TextStyle(color: Color(0xFF929DB2)),
+                      style: TextStyle(color: style.quaternary),
                     ),
                   )
                 : GridView.builder(
@@ -249,73 +243,74 @@ class _SoundCard extends StatelessWidget {
   final VoidCallback onTap;
 
   @override
-  Widget build(BuildContext context) => Material(
-    color: const Color(0xFF171D2D),
-    borderRadius: BorderRadius.circular(21),
-    child: InkWell(
+  Widget build(BuildContext context) {
+    final style = RestStyle.of(context);
+    final accent = style.layerAccent(sound.category);
+    return Material(
+      color: style.panel,
       borderRadius: BorderRadius.circular(21),
-      onTap: onTap,
-      child: Container(
-        padding: const EdgeInsets.all(15),
-        decoration: BoxDecoration(
-          borderRadius: BorderRadius.circular(21),
-          border: Border.all(
-            color: selected
-                ? const Color(0xFF9E91D6).withValues(alpha: 0.52)
-                : Colors.white.withValues(alpha: 0.055),
+      child: InkWell(
+        borderRadius: BorderRadius.circular(21),
+        onTap: onTap,
+        child: Ink(
+          padding: const EdgeInsets.all(15),
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(21),
+            gradient: LinearGradient(
+              begin: Alignment.topLeft,
+              end: Alignment.bottomRight,
+              colors: [style.tint(accent, selected ? 0.20 : 0.11), style.panel],
+            ),
+            border: Border.all(
+              color: selected ? accent.withValues(alpha: 0.55) : style.outline,
+            ),
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                children: [
+                  SoundIcon(sound: sound, size: 52),
+                  const Spacer(),
+                  AnimatedContainer(
+                    duration: const Duration(milliseconds: 180),
+                    width: 28,
+                    height: 28,
+                    decoration: BoxDecoration(
+                      shape: BoxShape.circle,
+                      color: selected ? accent : style.raised,
+                    ),
+                    child: Icon(
+                      selected ? Icons.check_rounded : Icons.add_rounded,
+                      size: 17,
+                      color: selected ? style.onAccent : style.text,
+                    ),
+                  ),
+                ],
+              ),
+              const Spacer(),
+              Text(
+                sound.name,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: TextStyle(
+                  color: style.text,
+                  fontWeight: FontWeight.w600,
+                  fontSize: 15,
+                ),
+              ),
+              const SizedBox(height: 4),
+              Text(
+                selected ? 'Added to your mix' : sound.category,
+                style: TextStyle(
+                  color: selected ? accent : style.quaternary,
+                  fontSize: 11,
+                ),
+              ),
+            ],
           ),
         ),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
-              children: [
-                SoundIcon(sound: sound, size: 52),
-                const Spacer(),
-                AnimatedContainer(
-                  duration: const Duration(milliseconds: 180),
-                  width: 28,
-                  height: 28,
-                  decoration: BoxDecoration(
-                    shape: BoxShape.circle,
-                    color: selected
-                        ? const Color(0xFFB4A8EC)
-                        : const Color(0xFF252D40),
-                  ),
-                  child: Icon(
-                    selected ? Icons.check_rounded : Icons.add_rounded,
-                    size: 17,
-                    color: selected
-                        ? const Color(0xFF151728)
-                        : const Color(0xFFB2BACC),
-                  ),
-                ),
-              ],
-            ),
-            const Spacer(),
-            Text(
-              sound.name,
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-              style: const TextStyle(
-                color: Color(0xFFF0F2F6),
-                fontWeight: FontWeight.w600,
-                fontSize: 15,
-              ),
-            ),
-            const SizedBox(height: 4),
-            Text(
-              selected ? 'Added to your mix' : sound.category,
-              style: TextStyle(
-                color: selected
-                    ? const Color(0xFFB7ACEF)
-                    : const Color(0xFF929DB2),
-                fontSize: 11,
-              ),
-            ),
-          ],
-        ),
       ),
-    ),
-  );
+    );
+  }
 }

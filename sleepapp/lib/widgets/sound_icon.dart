@@ -1,5 +1,6 @@
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 
+import '../models/rest_style.dart';
 import '../models/sound.dart';
 
 class SoundIcon extends StatelessWidget {
@@ -10,12 +11,7 @@ class SoundIcon extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final color = switch (sound.category) {
-      'Nature' => const Color(0xFF9CC9B3),
-      'Warmth' => const Color(0xFFE3A884),
-      'Water' => const Color(0xFF8EBDE1),
-      _ => const Color(0xFFB4A5E8),
-    };
+    final color = RestStyle.of(context).layerAccent(sound.category);
 
     return Container(
       width: size,
