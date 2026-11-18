@@ -4,12 +4,14 @@ import 'dart:convert';
 import 'package:material_ui/material_ui.dart';
 import 'package:flutter/services.dart';
 
+import '../l10n/rest_strings.dart';
 import '../models/mix_rotation.dart';
 import '../models/rest_style.dart';
 import '../models/sound.dart';
 import '../models/sound_mix.dart';
 import '../services/audio_service.dart';
 import '../services/imported_sound_storage.dart';
+import '../services/language_preference.dart';
 import '../services/mix_rotation_storage.dart';
 import '../services/mix_storage.dart';
 import '../services/sleep_audio_handler.dart';
@@ -55,12 +57,13 @@ class _StartupScreenState extends State<StartupScreen>
 
   Future<_StartupData> _load() async {
     try {
-      final (audio, sounds, mixes, rotation, _) = await (
+      final (audio, sounds, mixes, rotation, _, _) = await (
         initializeSleepAudio(),
         _loadSounds(),
         _loadSavedMixes(),
         _loadRotation(),
         _restoreTheme(),
+        LanguagePreference.restore(),
       ).wait;
       return (audio, sounds, mixes, rotation);
     } catch (error) {
@@ -134,13 +137,13 @@ class _StartupScreenState extends State<StartupScreen>
               lastPlayedId: lastPlayedId,
             );
           } else if (snapshot.hasError) {
-            screen = const Scaffold(
+            screen = Scaffold(
               backgroundColor: Colors.black,
               body: Center(
                 child: Padding(
-                  padding: EdgeInsets.all(32),
+                  padding: const EdgeInsets.all(32),
                   child: Text(
-                    'REST couldn’t start. Close and reopen the app to try again.',
+                    context.t(L.startupError),
                     textAlign: TextAlign.center,
                   ),
                 ),

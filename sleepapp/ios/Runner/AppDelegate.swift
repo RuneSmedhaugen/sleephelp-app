@@ -92,16 +92,10 @@ private final class RestAlarmBridge {
     var systemIDs: [UUID] { [scheduleID, snoozeID].compactMap { $0 } }
   }
 
-  private enum AlarmFailure: LocalizedError {
-    case invalid, permission, busy
-
-    var errorDescription: String? {
-      switch self {
-      case .invalid: return "REST couldn't read the alarm details."
-      case .permission: return "Allow Alarms for REST in iOS Settings first."
-      case .busy: return "An alarm is already being updated. Try again in a moment."
-      }
-    }
+  private enum AlarmFailure: String, Error {
+    case invalid = "alarmInvalid"
+    case permission = "iosRequired"
+    case busy = "alarmBusy"
   }
 
   func handle(_ call: FlutterMethodCall, result: FlutterResult) async {
@@ -109,6 +103,12 @@ private final class RestAlarmBridge {
     let id = (args["id"] as? String).flatMap(UUID.init(uuidString:))
     do {
       switch call.method {
+      case "setLanguage":
+        guard let labels = args["labels"] as? [String: String] else {
+          throw AlarmFailure.invalid
+        }
+        UserDefaults.standard.set(labels, forKey: "restAlarmLabels")
+        result(nil)
       case "status":
         result(try status())
       case "allow":
@@ -165,7 +165,8 @@ private final class RestAlarmBridge {
         result(FlutterMethodNotImplemented)
       }
     } catch {
-      result(FlutterError(code: "alarm", message: error.localizedDescription, details: nil))
+      let code = (error as? AlarmFailure)?.rawValue ?? "alarm"
+      result(FlutterError(code: code, message: nil, details: nil))
     }
   }
 
@@ -336,10 +337,14 @@ private final class RestAlarmBridge {
   }
 
   private func scheduleAlarm(id: UUID, schedule: Alarm.Schedule) async throws {
+    let labels = UserDefaults.standard.dictionary(forKey: "restAlarmLabels") as? [String: String]
+    func label(_ key: String, _ fallback: String) -> LocalizedStringResource {
+      LocalizedStringResource(stringLiteral: labels?[key] ?? fallback)
+    }
     let alert = AlarmPresentation.Alert(
-      title: "REST alarm",
-      stopButton: AlarmButton(text: "Stop", textColor: .white, systemImageName: "stop.circle"),
-      secondaryButton: AlarmButton(text: "Snooze", textColor: .white, systemImageName: "zzz"),
+      title: label("alarmTitle", "REST alarm"),
+      stopButton: AlarmButton(text: label("stop", "Stop"), textColor: .white, systemImageName: "stop.circle"),
+      secondaryButton: AlarmButton(text: label("snooze", "Snooze"), textColor: .white, systemImageName: "zzz"),
       secondaryButtonBehavior: .custom
     )
     let attributes = AlarmAttributes(

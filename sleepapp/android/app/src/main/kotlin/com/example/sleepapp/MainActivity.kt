@@ -1,6 +1,7 @@
 package com.example.sleepapp
 
 import android.Manifest
+import android.app.NotificationManager
 import android.content.Intent
 import android.content.pm.PackageManager
 import android.net.Uri
@@ -18,6 +19,21 @@ class MainActivity : AudioServiceActivity() {
                 val alarms = WakeAlarms(this)
                 try {
                     when (call.method) {
+                        "setLanguage" -> {
+                            val language = AlarmLanguage(this)
+                            language.save(
+                                requireNotNull(call.argument<String>("locale")),
+                                requireNotNull(call.argument<Map<String, String>>("labels"))
+                            )
+                            if (Build.VERSION.SDK_INT >= 26) {
+                                val manager = getSystemService(NotificationManager::class.java)
+                                manager.getNotificationChannel(RingingAlarmService.CHANNEL)?.let {
+                                    it.name = language.text("alarmChannel", "Wake-up alarms")
+                                    manager.createNotificationChannel(it)
+                                }
+                            }
+                            result.success(null)
+                        }
                         "status" -> result.success(alarms.status())
                         "save" -> {
                             alarms.save(
@@ -69,8 +85,11 @@ class MainActivity : AudioServiceActivity() {
                         }
                         else -> result.notImplemented()
                     }
+                } catch (error: AlarmPermissionRequired) {
+                    result.error(error.code, null, null)
                 } catch (error: Exception) {
-                    result.error("alarm", error.message ?: "Could not update the alarm.", null)
+                    android.util.Log.e("RestAlarm", "Alarm request failed", error)
+                    result.error("alarm", null, null)
                 }
             }
     }

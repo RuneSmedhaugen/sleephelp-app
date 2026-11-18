@@ -1,7 +1,9 @@
 import 'package:material_ui/material_ui.dart';
 
+import 'l10n/rest_strings.dart';
 import 'models/rest_style.dart';
 import 'screens/startup_screen.dart';
+import 'services/language_preference.dart';
 
 void main() {
   WidgetsFlutterBinding.ensureInitialized();
@@ -12,11 +14,22 @@ class SleepApp extends StatelessWidget {
   const SleepApp({super.key});
 
   @override
-  Widget build(BuildContext context) => ValueListenableBuilder<RestStyle>(
-    valueListenable: RestStyle.selected,
-    builder: (context, style, _) {
+  Widget build(BuildContext context) => ListenableBuilder(
+    listenable: Listenable.merge([
+      RestStyle.selected,
+      LanguagePreference.selected,
+    ]),
+    builder: (context, _) {
+      final style = RestStyle.selected.value;
       return MaterialApp(
         title: 'REST',
+        locale: LanguagePreference.selected.value,
+        supportedLocales: RestStrings.supportedLocales,
+        localeListResolutionCallback: RestStrings.resolve,
+        localizationsDelegates: [
+          RestStrings.delegate,
+          ...GlobalMaterialLocalizations.delegates,
+        ],
         debugShowCheckedModeBanner: false,
         theme: ThemeData(
           colorScheme:

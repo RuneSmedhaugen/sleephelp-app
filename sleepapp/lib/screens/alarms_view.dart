@@ -1,9 +1,10 @@
 import 'package:material_ui/material_ui.dart';
 
+import '../l10n/rest_strings.dart';
 import '../models/rest_style.dart';
 import '../services/wake_alarms.dart';
 
-const _weekdays = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
+const _weekdays = [L.mon, L.tue, L.wed, L.thu, L.fri, L.sat, L.sun];
 const _workdays = [1, 2, 3, 4, 5];
 
 class AlarmsView extends StatelessWidget {
@@ -22,15 +23,15 @@ class AlarmsView extends StatelessWidget {
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
-        title: const Text('Delete alarm?'),
+        title: Text(context.t(L.deleteAlarm)),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context, false),
-            child: const Text('Keep alarm'),
+            child: Text(context.t(L.keepAlarm)),
           ),
           FilledButton(
             onPressed: () => Navigator.pop(context, true),
-            child: const Text('Delete'),
+            child: Text(context.t(L.delete)),
           ),
         ],
       ),
@@ -54,7 +55,7 @@ class AlarmsView extends StatelessWidget {
               children: [
                 Expanded(
                   child: Text(
-                    'Alarms',
+                    context.t(L.alarms),
                     style: TextStyle(
                       color: style.text,
                       fontSize: 28,
@@ -66,7 +67,7 @@ class AlarmsView extends StatelessWidget {
                   FilledButton.tonalIcon(
                     onPressed: alarms.busy ? null : () => _edit(context),
                     icon: const Icon(Icons.add_rounded),
-                    label: const Text('Add alarm'),
+                    label: Text(context.t(L.addAlarm)),
                   ),
               ],
             ),
@@ -74,12 +75,13 @@ class AlarmsView extends StatelessWidget {
             if (alarms.error case final error?)
               Padding(
                 padding: const EdgeInsets.only(bottom: 12),
-                child: Text(error, style: TextStyle(color: style.text)),
+                child: Text(
+                  context.t(error),
+                  style: TextStyle(color: style.text),
+                ),
               ),
             if (unsupported)
-              const Text(
-                'Wake-up alarms are available on Android and iOS 26 or later.',
-              )
+              Text(context.t(L.alarmUnavailable))
             else if (!alarms.ready && alarms.error == null)
               const Center(child: CircularProgressIndicator())
             else ...[
@@ -90,7 +92,7 @@ class AlarmsView extends StatelessWidget {
                 ),
               if (alarms.alarms.isEmpty && alarms.ready)
                 Text(
-                  'No alarms set.',
+                  context.t(L.noAlarms),
                   style: TextStyle(color: style.quaternary),
                 ),
               for (final alarm in alarms.alarms)
@@ -108,13 +110,14 @@ class AlarmsView extends StatelessWidget {
                         fontWeight: FontWeight.w600,
                       ),
                     ),
-                    subtitle: Text(_alarmSubtitle(alarm)),
+                    subtitle: Text(_alarmSubtitle(context, alarm)),
                     trailing: Row(
                       mainAxisSize: MainAxisSize.min,
                       children: [
                         IconButton(
-                          tooltip:
-                              'Delete alarm at ${alarm.time.format(context)}',
+                          tooltip: context.t(L.deleteAlarmAt, [
+                            alarm.time.format(context),
+                          ]),
                           onPressed: alarms.busy
                               ? null
                               : () => _delete(context, alarm),
@@ -147,14 +150,14 @@ class AlarmsView extends StatelessWidget {
     },
   );
 
-  String _alarmSubtitle(WakeAlarm alarm) {
-    if (alarm.snoozed) return 'Snoozed';
-    if (alarm.days.isEmpty) return 'Once';
-    if (alarm.days.length == 7) return 'Every day';
+  String _alarmSubtitle(BuildContext context, WakeAlarm alarm) {
+    if (alarm.snoozed) return context.t(L.snoozed);
+    if (alarm.days.isEmpty) return context.t(L.once);
+    if (alarm.days.length == 7) return context.t(L.everyDay);
     if (alarm.days.length == 5 && _workdays.every(alarm.days.contains)) {
-      return 'Mon–Fri';
+      return context.t(L.weekdays);
     }
-    return alarm.days.map((day) => _weekdays[day - 1]).join(' · ');
+    return alarm.days.map((day) => context.t(_weekdays[day - 1])).join(' · ');
   }
 }
 
@@ -167,23 +170,20 @@ class _PermissionCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final (title, subtitle) = switch (permission) {
-      'exact' => (
-        'Allow Alarms & reminders',
-        'Lets REST ring at the time you set.',
-      ),
+      'exact' => (context.t(L.allowExact), context.t(L.allowExactDetails)),
       'notifications' => (
-        'Allow alarm notifications',
-        'Shows Snooze and Stop outside REST.',
+        context.t(L.allowNotifications),
+        context.t(L.allowNotificationsDetails),
       ),
       'fullScreen' => (
-        'Allow full-screen alarms',
-        'Optional. Show alarm controls over the lock screen.',
+        context.t(L.allowFullScreen),
+        context.t(L.allowFullScreenDetails),
       ),
       'iosSettings' => (
-        'Allow alarms in Settings',
-        'Turn on Alarms for REST in iOS Settings.',
+        context.t(L.allowIosSettings),
+        context.t(L.allowIosSettingsDetails),
       ),
-      _ => ('Allow alarms', 'Lets iOS present REST alarms on the lock screen.'),
+      _ => (context.t(L.allowIos), context.t(L.allowIosDetails)),
     };
     return Card(
       margin: const EdgeInsets.only(bottom: 10),
@@ -216,7 +216,7 @@ class _AlarmEditorState extends State<_AlarmEditor> {
   late int _finishBefore = widget.alarm?.finishBeforeMinutes ?? 60;
   late int _fade = widget.alarm?.fadeMinutes ?? 10;
   bool _saving = false;
-  String? _error;
+  L? _error;
 
   Future<void> _save() async {
     setState(() {
@@ -239,7 +239,7 @@ class _AlarmEditorState extends State<_AlarmEditor> {
     } else {
       setState(() {
         _saving = false;
-        _error = widget.alarms.error ?? 'Could not save the alarm. Try again.';
+        _error = widget.alarms.error ?? L.alarmSaveError;
       });
     }
   }
@@ -254,7 +254,9 @@ class _AlarmEditorState extends State<_AlarmEditor> {
     final weekdaysSelected =
         _days.length == 5 && _workdays.every(_days.contains);
     return AlertDialog(
-      title: Text(widget.alarm == null ? 'Add alarm' : 'Edit alarm'),
+      title: Text(
+        widget.alarm == null ? context.t(L.addAlarm) : context.t(L.editAlarm),
+      ),
       content: SingleChildScrollView(
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
@@ -269,13 +271,13 @@ class _AlarmEditorState extends State<_AlarmEditor> {
               ),
             ),
             const SizedBox(height: 16),
-            Text(_days.isEmpty ? 'Repeat · Once' : 'Repeat'),
+            Text(_days.isEmpty ? context.t(L.repeatOnce) : context.t(L.repeat)),
             const SizedBox(height: 6),
             Wrap(
               spacing: 8,
               children: [
                 FilterChip(
-                  label: const Text('Mon–Fri'),
+                  label: Text(context.t(L.weekdays)),
                   selected: weekdaysSelected,
                   onSelected: _saving
                       ? null
@@ -284,7 +286,7 @@ class _AlarmEditorState extends State<_AlarmEditor> {
                         }),
                 ),
                 FilterChip(
-                  label: const Text('Every day'),
+                  label: Text(context.t(L.everyDay)),
                   selected: _days.length == 7,
                   onSelected: _saving
                       ? null
@@ -299,7 +301,7 @@ class _AlarmEditorState extends State<_AlarmEditor> {
               children: [
                 for (var day = 1; day <= 7; day++)
                   FilterChip(
-                    label: Text(_weekdays[day - 1]),
+                    label: Text(context.t(_weekdays[day - 1])),
                     selected: _days.contains(day),
                     onSelected: _saving
                         ? null
@@ -316,10 +318,8 @@ class _AlarmEditorState extends State<_AlarmEditor> {
             const SizedBox(height: 16),
             SwitchListTile(
               contentPadding: EdgeInsets.zero,
-              title: const Text('Custom sleep fade'),
-              subtitle: const Text(
-                'Used when this is your next alarm and it’s within 12 hours of Play.',
-              ),
+              title: Text(context.t(L.customFade)),
+              subtitle: Text(context.t(L.customFadeDetails)),
               value: _customPlayback,
               onChanged: _saving
                   ? null
@@ -328,7 +328,7 @@ class _AlarmEditorState extends State<_AlarmEditor> {
             if (_customPlayback) ...[
               const SizedBox(height: 10),
               _minutesField(
-                title: 'Finish sounds',
+                title: context.t(L.finishSounds),
                 selected: _finishBefore,
                 choices: const [
                   0,
@@ -345,24 +345,25 @@ class _AlarmEditorState extends State<_AlarmEditor> {
                   720,
                 ],
                 label: (minutes) => minutes == 0
-                    ? 'At the alarm'
-                    : '${_durationLabel(minutes)} before the alarm',
+                    ? context.t(L.atAlarm)
+                    : context.t(L.beforeAlarm, [_durationLabel(minutes)]),
                 onChanged: (value) => setState(() => _finishBefore = value),
               ),
               const SizedBox(height: 10),
               _minutesField(
-                title: 'Fade over',
+                title: context.t(L.fadeOver),
                 selected: _fade,
                 choices: const [0, 2, 5, 10, 15, 20, 30, 45, 60, 90, 120],
-                label: (minutes) =>
-                    minutes == 0 ? 'No fade' : _durationLabel(minutes),
+                label: (minutes) => minutes == 0
+                    ? context.t(L.noFade)
+                    : _durationLabel(minutes),
                 onChanged: (value) => setState(() => _fade = value),
               ),
             ],
             if (_error case final error?) ...[
               const SizedBox(height: 10),
               Text(
-                error,
+                context.t(error),
                 style: TextStyle(color: Theme.of(context).colorScheme.error),
               ),
             ],
@@ -372,11 +373,11 @@ class _AlarmEditorState extends State<_AlarmEditor> {
       actions: [
         TextButton(
           onPressed: _saving ? null : () => Navigator.pop(context),
-          child: const Text('Cancel'),
+          child: Text(context.t(L.cancel)),
         ),
         FilledButton(
           onPressed: _saving ? null : _save,
-          child: Text(_saving ? 'Saving…' : 'Save alarm'),
+          child: Text(_saving ? context.t(L.saving) : context.t(L.saveAlarm)),
         ),
       ],
     );
@@ -403,8 +404,9 @@ class _AlarmEditorState extends State<_AlarmEditor> {
           },
   );
 
-  String _durationLabel(int minutes) =>
-      minutes % 60 == 0 ? '${minutes ~/ 60} hr' : '$minutes min';
+  String _durationLabel(int minutes) => minutes % 60 == 0
+      ? context.t(L.hours, [minutes ~/ 60])
+      : context.t(L.minutes, [minutes]);
 }
 
 class RingingAlarmBanner extends StatelessWidget {
@@ -433,12 +435,12 @@ class RingingAlarmBanner extends StatelessWidget {
                   children: [
                     Icon(Icons.alarm_on_rounded, color: accent),
                     const SizedBox(width: 8),
-                    const Expanded(child: Text('Alarm ringing')),
+                    Expanded(child: Text(context.t(L.alarmRinging))),
                     TextButton(
                       onPressed: alarms.busy
                           ? null
                           : () => alarms.action('snooze', id),
-                      child: const Text('Snooze'),
+                      child: Text(context.t(L.snooze)),
                     ),
                     FilledButton(
                       style: FilledButton.styleFrom(
@@ -448,11 +450,11 @@ class RingingAlarmBanner extends StatelessWidget {
                       onPressed: alarms.busy
                           ? null
                           : () => alarms.action('stop', id),
-                      child: const Text('Stop'),
+                      child: Text(context.t(L.stop)),
                     ),
                   ],
                 ),
-                if (alarms.error case final error?) Text(error),
+                if (alarms.error case final error?) Text(context.t(error)),
               ],
             ),
           ),

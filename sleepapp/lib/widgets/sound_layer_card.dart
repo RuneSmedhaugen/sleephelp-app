@@ -1,5 +1,7 @@
 import 'package:material_ui/material_ui.dart';
 
+import '../l10n/rest_strings.dart';
+import '../l10n/sound_strings.dart';
 import '../models/rest_style.dart';
 import '../models/sound.dart';
 import 'sound_icon.dart';
@@ -42,7 +44,7 @@ class SoundLayerCard extends StatelessWidget {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
-                      sound.name,
+                      context.soundName(sound),
                       style: TextStyle(
                         color: style.text,
                         fontWeight: FontWeight.w600,
@@ -51,14 +53,14 @@ class SoundLayerCard extends StatelessWidget {
                     ),
                     const SizedBox(height: 2),
                     Text(
-                      sound.category,
+                      context.soundCategory(sound.category),
                       style: TextStyle(color: style.quaternary, fontSize: 12),
                     ),
                   ],
                 ),
               ),
               IconButton(
-                tooltip: 'Remove ${sound.name}',
+                tooltip: context.t(L.removeNamed, [context.soundName(sound)]),
                 onPressed: onRemove,
                 icon: const Icon(Icons.close_rounded, size: 19),
                 color: style.quaternary,
@@ -96,7 +98,7 @@ class SoundLayerCard extends StatelessWidget {
               SizedBox(
                 width: 36,
                 child: Text(
-                  '${(volume * 100).round()}%',
+                  context.t(L.percent, [(volume * 100).round()]),
                   textAlign: TextAlign.end,
                   style: TextStyle(
                     color: style.quaternary,

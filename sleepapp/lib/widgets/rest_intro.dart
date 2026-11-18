@@ -4,6 +4,8 @@ import 'dart:ui' as ui;
 import 'package:material_ui/material_ui.dart';
 import 'package:flutter/services.dart';
 
+import '../l10n/rest_strings.dart';
+
 class RestIntro extends StatefulWidget {
   const RestIntro({super.key, required this.progress});
 
@@ -62,7 +64,7 @@ class _RestIntroState extends State<RestIntro> {
         systemNavigationBarDividerColor: Colors.black,
       ),
       child: Semantics(
-        label: '$_subtitle, starting up',
+        label: '$_subtitle, ${context.t(L.startingUp)}',
         image: true,
         child: RepaintBoundary(
           child: SizedBox.expand(

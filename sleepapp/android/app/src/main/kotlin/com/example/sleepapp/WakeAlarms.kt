@@ -118,8 +118,8 @@ internal class WakeAlarms(private val context: Context) {
         require(finishBeforeMinutes == null || finishBeforeMinutes in 0..720)
         require(fadeMinutes == null || fadeMinutes in 0..120)
         if (enabled) {
-            check(canSchedule()) { "Allow Alarms & reminders in Android settings first." }
-            check(notificationsAllowed()) { "Allow alarm notifications so you can snooze or stop the alarm." }
+            if (!canSchedule()) throw AlarmPermissionRequired("exactRequired")
+            if (!notificationsAllowed()) throw AlarmPermissionRequired("notificationsRequired")
         }
         val alarm = WakeAlarm(
             id ?: UUID.randomUUID().toString(), hour, minute, days.distinct().sorted(),
@@ -254,7 +254,8 @@ class WakeAlarmReceiver : BroadcastReceiver() {
         } catch (error: Exception) {
             android.util.Log.e("RestAlarm", "Alarm action failed", error)
             if (intent.action == WakeAlarms.SNOOZE) {
-                android.widget.Toast.makeText(context, "Couldn't snooze the alarm.", android.widget.Toast.LENGTH_SHORT).show()
+                    val message = AlarmLanguage(context).text("snoozeError", "Couldn't snooze the alarm.")
+                    android.widget.Toast.makeText(context, message, android.widget.Toast.LENGTH_SHORT).show()
             }
         }
     }

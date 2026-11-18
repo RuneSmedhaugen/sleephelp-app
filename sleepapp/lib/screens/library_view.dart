@@ -1,6 +1,8 @@
 import 'package:flutter/foundation.dart';
 import 'package:material_ui/material_ui.dart';
 
+import '../l10n/rest_strings.dart';
+import '../l10n/sound_strings.dart';
 import '../models/rest_style.dart';
 import '../models/sound.dart';
 import '../widgets/sound_icon.dart';
@@ -61,7 +63,9 @@ class _LibraryViewState extends State<LibraryView> {
     final visibleSounds = widget.sounds.where((sound) {
       final matchesCategory = _category == 'All' || sound.category == _category;
       final matchesQuery =
-          query.isEmpty || sound.name.toLowerCase().contains(query);
+          query.isEmpty ||
+          context.soundName(sound).toLowerCase().contains(query) ||
+          sound.name.toLowerCase().contains(query);
       return matchesCategory && matchesQuery;
     }).toList();
 
@@ -78,7 +82,7 @@ class _LibraryViewState extends State<LibraryView> {
                   children: [
                     Expanded(
                       child: Text(
-                        'Find your calm',
+                        context.t(L.findCalm),
                         style: TextStyle(
                           color: style.text,
                           fontSize: 27,
@@ -98,13 +102,13 @@ class _LibraryViewState extends State<LibraryView> {
                                 ),
                               )
                             : const Icon(Icons.file_upload_outlined, size: 18),
-                        label: const Text('Import'),
+                        label: Text(context.t(L.importSound)),
                       ),
                   ],
                 ),
                 const SizedBox(height: 6),
                 Text(
-                  'Layer a few sounds together to make your own.',
+                  context.t(L.layerDescription),
                   style: TextStyle(color: style.quaternary, fontSize: 13),
                 ),
                 const SizedBox(height: 18),
@@ -113,12 +117,12 @@ class _LibraryViewState extends State<LibraryView> {
                   onChanged: (_) => setState(() {}),
                   textInputAction: TextInputAction.search,
                   decoration: InputDecoration(
-                    hintText: 'Search sounds',
+                    hintText: context.t(L.searchSounds),
                     prefixIcon: const Icon(Icons.search_rounded),
                     suffixIcon: _searchController.text.isEmpty
                         ? null
                         : IconButton(
-                            tooltip: 'Clear search',
+                            tooltip: context.t(L.clearSearch),
                             onPressed: () {
                               _searchController.clear();
                               setState(() {});
@@ -147,7 +151,7 @@ class _LibraryViewState extends State<LibraryView> {
                       final category = _categories[index];
                       final selected = _category == category;
                       return ChoiceChip(
-                        label: Text(category),
+                        label: Text(context.soundCategory(category)),
                         selected: selected,
                         onSelected: (_) => setState(() => _category = category),
                         showCheckmark: false,
@@ -177,13 +181,17 @@ class _LibraryViewState extends State<LibraryView> {
                 Row(
                   children: [
                     Text(
-                      '${visibleSounds.length} sounds',
+                      RestStrings.of(context).count(
+                        visibleSounds.length,
+                        L.soundCountOne,
+                        L.soundCountOther,
+                      ),
                       style: TextStyle(color: style.quaternary, fontSize: 12),
                     ),
                     const Spacer(),
                     if (widget.selectedSounds.isNotEmpty)
                       Text(
-                        '${widget.selectedSounds.length} in your mix',
+                        context.t(L.inYourMix, [widget.selectedSounds.length]),
                         style: TextStyle(color: style.primary, fontSize: 12),
                       ),
                   ],
@@ -197,8 +205,8 @@ class _LibraryViewState extends State<LibraryView> {
                 ? Center(
                     child: Text(
                       _category == Sound.importedCategory && query.isEmpty
-                          ? 'Use Import to add your own sounds.'
-                          : 'No sounds match that search.',
+                          ? context.t(L.importEmpty)
+                          : context.t(L.noMatchingSounds),
                       style: TextStyle(color: style.quaternary),
                     ),
                   )
@@ -290,7 +298,7 @@ class _SoundCard extends StatelessWidget {
               ),
               const Spacer(),
               Text(
-                sound.name,
+                context.soundName(sound),
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
                 style: TextStyle(
@@ -301,7 +309,9 @@ class _SoundCard extends StatelessWidget {
               ),
               const SizedBox(height: 4),
               Text(
-                selected ? 'Added to your mix' : sound.category,
+                selected
+                    ? context.t(L.addedToMix)
+                    : context.soundCategory(sound.category),
                 style: TextStyle(
                   color: selected ? accent : style.quaternary,
                   fontSize: 11,

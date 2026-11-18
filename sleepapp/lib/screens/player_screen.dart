@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:audio_service/audio_service.dart';
 import 'package:material_ui/material_ui.dart';
 
+import '../l10n/rest_strings.dart';
 import '../models/mix_rotation.dart';
 import '../models/rest_style.dart';
 import '../models/sound.dart';
@@ -65,6 +66,14 @@ class _PlayerScreenState extends State<PlayerScreen> {
   SleepAudioHandler get _audio => widget.audio;
 
   @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    final strings = RestStrings.of(context);
+    unawaited(_wakeAlarms.syncLanguage(strings));
+    _audio.updateMediaTitle(strings.text(L.playbackTitle));
+  }
+
+  @override
   void initState() {
     super.initState();
     _sounds = widget.sounds;
@@ -116,19 +125,15 @@ class _PlayerScreenState extends State<PlayerScreen> {
 
   bool _canStartPlayback() {
     if (!_wakeAlarms.ready) {
-      _showMessage(
-        'Could not check your alarm schedule. Try Play again in a moment.',
-      );
+      _showMessage(context.t(L.alarmCheckError));
       return false;
     }
     if (_wakeAlarms.ringingId != null) {
-      _showMessage('Stop or snooze the ringing alarm before pressing Play.');
+      _showLocalized(L.stopOrSnooze);
       return false;
     }
     if (!_audio.hasPlaybackSession && _audio.previewSleepPlan().blocked) {
-      _showMessage(
-        'The alarm’s planned stop time has passed. Choose the sleep timer to play tonight.',
-      );
+      _showMessage(context.t(L.beforePlayPastStop));
       return false;
     }
     return true;
@@ -162,7 +167,7 @@ class _PlayerScreenState extends State<PlayerScreen> {
       await _rotationStorage.save(_rotation, _lastPlayedId);
     } catch (error) {
       debugPrint('Could not save mix rotation: $error');
-      _showMessage('Could not save mix preferences on this device.');
+      _showLocalized(L.rotationSaveError);
     }
   }
 
@@ -187,11 +192,13 @@ class _PlayerScreenState extends State<PlayerScreen> {
     final now = DateTime.now();
     final assigned = _savedMix(_rotation.assignedMixId(now));
     final fallback = _savedMix(_lastPlayedId);
-    final name = assigned?.name ?? fallback?.name ?? 'No mix queued';
+    final name = assigned?.name ?? fallback?.name ?? context.t(L.noMixQueued);
     final slot = switch (_rotation.mode) {
-      MixRotationMode.off => 'Off',
-      MixRotationMode.daily => 'Today',
-      MixRotationMode.weekly => 'Week ${_rotation.weekIndex(now) + 1}',
+      MixRotationMode.off => context.t(L.off),
+      MixRotationMode.daily => context.t(L.today),
+      MixRotationMode.weekly => context.t(L.week, [
+        _rotation.weekIndex(now) + 1,
+      ]),
     };
     return '$slot · $name';
   }
@@ -245,21 +252,18 @@ class _PlayerScreenState extends State<PlayerScreen> {
     final shouldImport = await showDialog<bool>(
       context: context,
       builder: (dialogContext) => AlertDialog(
-        title: const Text('Import a sound'),
-        content: const Text(
-          'Only import audio you own or have permission to use. '
-          'You’re responsible for the files you choose. REST keeps a copy '
-          'on this device and doesn’t share it.\n\n'
-          'Choose an MP3, M4A, or WAV file.',
+        title: Text(context.t(L.importTitle)),
+        content: Text(
+          '${context.t(L.importNotice)}\n\n${context.t(L.chooseAudioFormat)}',
         ),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(dialogContext),
-            child: const Text('Cancel'),
+            child: Text(context.t(L.cancel)),
           ),
           FilledButton(
             onPressed: () => Navigator.pop(dialogContext, true),
-            child: const Text('Choose file'),
+            child: Text(context.t(L.chooseFile)),
           ),
         ],
       ),
@@ -267,16 +271,22 @@ class _PlayerScreenState extends State<PlayerScreen> {
     if (shouldImport != true || !mounted) return false;
 
     try {
-      final sound = await _importedSounds.pickAndImport();
+      final sound = await _importedSounds.pickAndImport(
+        audioFilesLabel: context.t(L.audioFiles),
+      );
       if (sound == null || !mounted) return false;
       setState(() => _sounds = [sound, ..._sounds]);
-      _showMessage('“${sound.name}” added to Imported.');
+      _showLocalized(L.soundImported, [sound.name]);
       return true;
-    } on FormatException catch (error) {
-      _showMessage(error.message);
+    } on SoundImportError catch (error) {
+      _showLocalized(switch (error) {
+        SoundImportError.unsupportedFormat => L.chooseAudioFormat,
+        SoundImportError.emptyFile => L.emptyAudio,
+        SoundImportError.unreadable => L.unreadableAudio,
+      });
     } catch (error) {
       debugPrint('Could not import sound: $error');
-      _showMessage('Could not import this sound. Try another file.');
+      _showLocalized(L.invalidImport);
     }
     return false;
   }
@@ -295,7 +305,7 @@ class _PlayerScreenState extends State<PlayerScreen> {
       if (mounted) setState(() {});
     } catch (error) {
       debugPrint('Could not change sound selection: $error');
-      _showMessage('That sound could not be loaded. Try another one.');
+      _showLocalized(L.loadedSoundError);
     } finally {
       if (mounted) setState(() => _busySounds.remove(sound.file));
     }
@@ -310,7 +320,7 @@ class _PlayerScreenState extends State<PlayerScreen> {
       if (mounted) setState(() {});
     } catch (error) {
       debugPrint('Could not change sound volume: $error');
-      _showMessage('Volume could not be changed.');
+      _showLocalized(L.volumeError);
     }
   }
 
@@ -330,7 +340,7 @@ class _PlayerScreenState extends State<PlayerScreen> {
         await _refreshDefaultMix();
         if (!mounted) return;
         if (_audio.selectedSounds.isEmpty) {
-          _showMessage('Add a sound to your mix first.');
+          _showLocalized(L.addSoundFirst);
           return;
         }
         await _audio.play();
@@ -338,7 +348,7 @@ class _PlayerScreenState extends State<PlayerScreen> {
       }
     } catch (error) {
       debugPrint('Playback command failed: $error');
-      _showMessage('Playback could not be started.');
+      _showLocalized(L.playError);
     }
   }
 
@@ -347,14 +357,14 @@ class _PlayerScreenState extends State<PlayerScreen> {
       await _audio.stop();
     } catch (error) {
       debugPrint('Stop command failed: $error');
-      _showMessage('Playback could not be stopped.');
+      _showLocalized(L.stopError);
     }
   }
 
   Future<void> _saveCurrentMix() async {
     final selected = _audio.selectedSounds.toList();
     if (selected.isEmpty) {
-      _showMessage('Add a sound before saving a mix.');
+      _showLocalized(L.addBeforeSave);
       return;
     }
 
@@ -375,35 +385,35 @@ class _PlayerScreenState extends State<PlayerScreen> {
       await _mixStorage.save(nextMixes);
       if (!mounted) return;
       setState(() => _savedMixes = nextMixes);
-      _showMessage('“${mix.name}” saved on this device.');
+      _showLocalized(L.mixSaved, [mix.name]);
     } catch (error) {
       debugPrint('Could not save mix: $error');
-      _showMessage('Could not save this mix on your device.');
+      _showLocalized(L.mixSaveError);
     }
   }
 
   Future<String?> _askForMixName() async {
-    final controller = TextEditingController(text: 'My night mix');
+    final controller = TextEditingController(text: context.t(L.nightMix));
     final name = await showDialog<String>(
       context: context,
       builder: (dialogContext) => AlertDialog(
-        title: const Text('Name this mix'),
+        title: Text(context.t(L.nameMix)),
         content: TextField(
           controller: controller,
           autofocus: true,
           maxLength: 32,
           textCapitalization: TextCapitalization.sentences,
-          decoration: const InputDecoration(hintText: 'A name you’ll remember'),
+          decoration: InputDecoration(hintText: context.t(L.nameHint)),
           onSubmitted: (value) => Navigator.pop(dialogContext, value),
         ),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(dialogContext),
-            child: const Text('Cancel'),
+            child: Text(context.t(L.cancel)),
           ),
           FilledButton(
             onPressed: () => Navigator.pop(dialogContext, controller.text),
-            child: const Text('Save mix'),
+            child: Text(context.t(L.saveMix)),
           ),
         ],
       ),
@@ -436,16 +446,16 @@ class _PlayerScreenState extends State<PlayerScreen> {
       await _wakeAlarms.refresh();
       if (!mounted || !_canStartPlayback()) return;
       if (!await _loadMix(mix, onlyWhenIdle: false)) {
-        _showMessage('This mix has no sounds in the current library.');
+        _showLocalized(L.mixNoSounds);
         return;
       }
       _followRotation = true;
       await _audio.play();
       _rememberPlayedMix();
-      _showMessage('Playing “${mix.name}”.');
+      _showLocalized(L.playingMix, [mix.name]);
     } catch (error) {
       debugPrint('Could not load saved mix: $error');
-      _showMessage('Could not load this mix.');
+      _showLocalized(L.mixLoadError);
     } finally {
       _finishMixChange();
     }
@@ -455,16 +465,16 @@ class _PlayerScreenState extends State<PlayerScreen> {
     final shouldDelete = await showDialog<bool>(
       context: context,
       builder: (dialogContext) => AlertDialog(
-        title: const Text('Delete saved mix?'),
-        content: Text('“${mix.name}” will be removed from this device.'),
+        title: Text(context.t(L.deleteMix)),
+        content: Text(context.t(L.deleteMixDetail, [mix.name])),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(dialogContext, false),
-            child: const Text('Keep it'),
+            child: Text(context.t(L.keepMix)),
           ),
           FilledButton(
             onPressed: () => Navigator.pop(dialogContext, true),
-            child: const Text('Delete'),
+            child: Text(context.t(L.delete)),
           ),
         ],
       ),
@@ -479,7 +489,7 @@ class _PlayerScreenState extends State<PlayerScreen> {
       await _refreshDefaultMix();
     } catch (error) {
       debugPrint('Could not delete saved mix: $error');
-      _showMessage('Could not delete this mix.');
+      _showLocalized(L.mixDeleteError);
     }
   }
 
@@ -518,6 +528,10 @@ class _PlayerScreenState extends State<PlayerScreen> {
         },
       ),
     );
+  }
+
+  void _showLocalized(L key, [List<Object> values = const []]) {
+    if (mounted) _showMessage(context.t(key, values));
   }
 
   void _showMessage(String message) {
@@ -609,31 +623,31 @@ class _PlayerScreenState extends State<PlayerScreen> {
       bottomNavigationBar: NavigationBar(
         selectedIndex: _activeTab,
         onDestinationSelected: (index) => setState(() => _activeTab = index),
-        destinations: const [
+        destinations: [
           NavigationDestination(
             icon: Icon(Icons.nightlight_outlined),
             selectedIcon: Icon(Icons.nightlight_round),
-            label: 'Tonight',
+            label: context.t(L.tonight),
           ),
           NavigationDestination(
             icon: Icon(Icons.graphic_eq_outlined),
             selectedIcon: Icon(Icons.graphic_eq_rounded),
-            label: 'Sounds',
+            label: context.t(L.sounds),
           ),
           NavigationDestination(
             icon: Icon(Icons.bookmark_border_rounded),
             selectedIcon: Icon(Icons.bookmark_rounded),
-            label: 'Saved',
+            label: context.t(L.saved),
           ),
           NavigationDestination(
             icon: Icon(Icons.alarm_outlined),
             selectedIcon: Icon(Icons.alarm_on_rounded),
-            label: 'Alarms',
+            label: context.t(L.alarms),
           ),
           NavigationDestination(
             icon: Icon(Icons.settings_outlined),
             selectedIcon: Icon(Icons.settings_rounded),
-            label: 'Settings',
+            label: context.t(L.settings),
           ),
         ],
       ),

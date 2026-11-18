@@ -30,6 +30,7 @@ import java.text.DateFormat
 import java.util.Date
 
 class RingingAlarmService : Service() {
+    private val language by lazy { AlarmLanguage(this) }
     private var player: MediaPlayer? = null
     private var fallbackTone: ToneGenerator? = null
     private var focus: AudioFocusRequest? = null
@@ -53,7 +54,9 @@ class RingingAlarmService : Service() {
         super.onCreate()
         current = this
         if (Build.VERSION.SDK_INT >= 26) {
-            val channel = NotificationChannel(CHANNEL, "Wake-up alarms", NotificationManager.IMPORTANCE_HIGH)
+            val channel = NotificationChannel(
+                CHANNEL, language.text("alarmChannel", "Wake-up alarms"), NotificationManager.IMPORTANCE_HIGH
+            )
             channel.lockscreenVisibility = Notification.VISIBILITY_PUBLIC
             channel.setSound(null, null) // The alarm service plays the looping alarm tone.
             getSystemService(NotificationManager::class.java).createNotificationChannel(channel)
@@ -114,15 +117,15 @@ class RingingAlarmService : Service() {
         val builder = if (Build.VERSION.SDK_INT >= 26) Notification.Builder(this, CHANNEL)
             else Notification.Builder(this).setPriority(Notification.PRIORITY_MAX)
         builder.setSmallIcon(android.R.drawable.ic_lock_idle_alarm)
-            .setContentTitle("REST alarm")
-            .setContentText("Snooze for 9 minutes or stop the alarm.")
+            .setContentTitle(language.text("alarmTitle", "REST alarm"))
+            .setContentText(language.text("alarmAlertDetail", "Snooze for 9 minutes or stop the alarm."))
             .setCategory(Notification.CATEGORY_ALARM)
             .setVisibility(Notification.VISIBILITY_PUBLIC)
             .setOngoing(true)
             .setContentIntent(screen)
             .setFullScreenIntent(screen, true)
-            .addAction(Notification.Action.Builder(null, "Snooze", action(WakeAlarms.SNOOZE)).build())
-            .addAction(Notification.Action.Builder(null, "Stop", action(WakeAlarms.STOP)).build())
+            .addAction(Notification.Action.Builder(null, language.text("snooze", "Snooze"), action(WakeAlarms.SNOOZE)).build())
+            .addAction(Notification.Action.Builder(null, language.text("stop", "Stop"), action(WakeAlarms.STOP)).build())
         if (Build.VERSION.SDK_INT >= 31) {
             builder.setForegroundServiceBehavior(Notification.FOREGROUND_SERVICE_IMMEDIATE)
         }
@@ -229,6 +232,7 @@ class RingingAlarmService : Service() {
 }
 
 class RingingAlarmActivity : Activity() {
+    private val language by lazy { AlarmLanguage(this) }
     private val handler = Handler(Looper.getMainLooper())
     private val checkRinging = object : Runnable {
         override fun run() {
@@ -254,22 +258,22 @@ class RingingAlarmActivity : Activity() {
             setBackgroundColor(0xff0b0d12.toInt())
         }
         layout.addView(TextView(this).apply {
-            text = DateFormat.getTimeInstance(DateFormat.SHORT).format(Date())
+            text = DateFormat.getTimeInstance(DateFormat.SHORT, language.locale).format(Date())
             textSize = 48f
             setTextColor(0xfff1f4fa.toInt())
         })
         layout.addView(TextView(this).apply {
-            text = "REST alarm"
+            text = language.text("alarmTitle", "REST alarm")
             textSize = 20f
             setTextColor(0xffc399ff.toInt())
             setPadding(0, 0, 0, 22)
         })
         layout.addView(Button(this).apply {
-            text = "Snooze · 9 min"
+            text = language.text("snoozeMinutes", "Snooze · 9 min")
             setOnClickListener { handleAlarm(snooze = true) }
         })
         layout.addView(Button(this).apply {
-            text = "Stop"
+            text = language.text("stop", "Stop")
             setOnClickListener { handleAlarm(snooze = false) }
         })
         setContentView(layout)
@@ -292,7 +296,9 @@ class RingingAlarmActivity : Activity() {
             if (snooze) alarms.snooze(id) else alarms.stop(id)
             if (RingingAlarmService.ringingId == null) finish()
         } catch (error: Exception) {
-            Toast.makeText(this, error.message ?: "Couldn't update the alarm.", Toast.LENGTH_SHORT).show()
+            android.util.Log.e("RestAlarm", "Alarm action failed", error)
+            val message = language.text("alarmUpdateError", "Couldn't update the alarm.")
+            Toast.makeText(this, message, Toast.LENGTH_SHORT).show()
         }
     }
 }

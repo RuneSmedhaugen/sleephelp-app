@@ -1,5 +1,7 @@
 import 'package:material_ui/material_ui.dart';
 
+import '../l10n/rest_strings.dart';
+import '../l10n/sound_strings.dart';
 import '../models/rest_style.dart';
 import '../models/sound.dart';
 import '../models/wake_playback.dart';
@@ -83,11 +85,11 @@ class SleepHomeView extends StatelessWidget {
               const SizedBox(height: 30),
               Row(
                 children: [
-                  const Expanded(child: _SectionTitle('Your soundscape')),
+                  Expanded(child: _SectionTitle(context.t(L.soundscape))),
                   TextButton.icon(
                     onPressed: selected.isEmpty ? null : onSaveMix,
                     icon: const Icon(Icons.bookmark_add_outlined, size: 18),
-                    label: const Text('Save'),
+                    label: Text(context.t(L.save)),
                   ),
                 ],
               ),
@@ -121,14 +123,17 @@ class SleepHomeView extends StatelessWidget {
               const SizedBox(height: 26),
               Row(
                 children: [
-                  const Expanded(child: _SectionTitle('Add a layer')),
-                  TextButton(onPressed: onBrowse, child: const Text('See all')),
+                  Expanded(child: _SectionTitle(context.t(L.addLayer))),
+                  TextButton(
+                    onPressed: onBrowse,
+                    child: Text(context.t(L.seeAll)),
+                  ),
                 ],
               ),
               const SizedBox(height: 4),
               if (suggestions.isEmpty)
                 Text(
-                  'You have every sound in this collection.',
+                  context.t(L.allSoundsAdded),
                   style: TextStyle(color: style.quaternary),
                 )
               else
@@ -175,7 +180,7 @@ class _TopGreeting extends StatelessWidget {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Text(
-                'NIGHT SOUNDS',
+                context.t(L.nightSounds),
                 style: TextStyle(
                   color: style.quaternary,
                   fontSize: 10,
@@ -185,7 +190,7 @@ class _TopGreeting extends StatelessWidget {
               ),
               SizedBox(height: 2),
               Text(
-                'Settle in',
+                context.t(L.settleIn),
                 style: TextStyle(
                   color: style.text,
                   fontSize: 20,
@@ -269,7 +274,9 @@ class _PlaybackCard extends StatelessWidget {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  isPlaying ? 'Playing softly' : 'Ready when you are',
+                  isPlaying
+                      ? context.t(L.playingSoftly)
+                      : context.t(L.readyToPlay),
                   style: TextStyle(
                     color: style.text,
                     fontSize: 14,
@@ -279,7 +286,8 @@ class _PlaybackCard extends StatelessWidget {
                 const SizedBox(height: 3),
                 Text(
                   mixName ??
-                      '$count ${count == 1 ? 'layer' : 'layers'} in your mix',
+                      RestStrings.of(context)
+                          .count(count, L.layerCountOne, L.layerCountOther),
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
                   style: TextStyle(color: style.quaternary, fontSize: 12),
@@ -288,7 +296,7 @@ class _PlaybackCard extends StatelessWidget {
             ),
           ),
           IconButton(
-            tooltip: isPlaying ? 'Pause' : 'Play',
+            tooltip: isPlaying ? context.t(L.pause) : context.t(L.play),
             onPressed: onPlayPause,
             icon: Icon(
               isPlaying ? Icons.pause_rounded : Icons.play_arrow_rounded,
@@ -301,7 +309,7 @@ class _PlaybackCard extends StatelessWidget {
             ),
           ),
           IconButton(
-            tooltip: 'Stop and reset',
+            tooltip: context.t(L.stopReset),
             onPressed: canStop ? onStop : null,
             icon: const Icon(Icons.stop_rounded, size: 22),
             color: style.stopAccent ?? style.quaternary,
@@ -334,7 +342,10 @@ class _MasterVolumeCard extends StatelessWidget {
             color: style.volumeAccent ?? style.primary,
           ),
           const SizedBox(width: 10),
-          Text('Master', style: TextStyle(color: style.text, fontSize: 13)),
+          Text(
+            context.t(L.masterVolume),
+            style: TextStyle(color: style.text, fontSize: 13),
+          ),
           Expanded(
             child: Slider(
               value: value.clamp(0.0, 1.0).toDouble(),
@@ -342,7 +353,7 @@ class _MasterVolumeCard extends StatelessWidget {
             ),
           ),
           Text(
-            '${(value * 100).round()}%',
+            context.t(L.percent, [(value * 100).round()]),
             style: TextStyle(color: style.quaternary, fontSize: 11),
           ),
         ],
@@ -382,7 +393,7 @@ class _EmptyMixCard extends StatelessWidget {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  'Start with one sound',
+                  context.t(L.startOneSound),
                   style: TextStyle(
                     color: style.text,
                     fontSize: 14,
@@ -391,7 +402,7 @@ class _EmptyMixCard extends StatelessWidget {
                 ),
                 SizedBox(height: 4),
                 Text(
-                  'Layer a few favorites into your own mix.',
+                  context.t(L.layerFavorites),
                   style: TextStyle(color: style.quaternary, fontSize: 12),
                 ),
               ],
@@ -399,7 +410,7 @@ class _EmptyMixCard extends StatelessWidget {
           ),
           IconButton.filledTonal(
             onPressed: onBrowse,
-            tooltip: 'Browse sounds',
+            tooltip: context.t(L.browseSounds),
             icon: const Icon(Icons.add_rounded),
           ),
         ],
@@ -434,7 +445,7 @@ class _SuggestionCard extends StatelessWidget {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  sound.name,
+                  context.soundName(sound),
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
                   style: TextStyle(
@@ -454,7 +465,7 @@ class _SuggestionCard extends StatelessWidget {
                       children: [
                         Icon(Icons.add_rounded, size: 14, color: style.primary),
                         Text(
-                          'Add',
+                          context.t(L.add),
                           style: TextStyle(color: style.primary, fontSize: 11),
                         ),
                       ],

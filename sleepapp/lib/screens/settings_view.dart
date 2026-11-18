@@ -1,11 +1,71 @@
 import 'package:material_ui/material_ui.dart';
 
+import '../l10n/rest_strings.dart';
 import '../models/rest_style.dart';
+import '../services/language_preference.dart';
 import '../services/theme_storage.dart';
 import '../widgets/rest_artwork.dart';
+import 'language_settings_screen.dart';
 
 class SettingsView extends StatelessWidget {
   const SettingsView({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    final style = RestStyle.of(context);
+    return SafeArea(
+      child: ListView(
+        padding: const EdgeInsets.fromLTRB(22, 24, 22, 32),
+        children: [
+          Text(
+            context.t(L.settings),
+            style: TextStyle(
+              color: style.text,
+              fontSize: 27,
+              fontWeight: FontWeight.w600,
+              letterSpacing: -0.7,
+            ),
+          ),
+          const SizedBox(height: 22),
+          Card(
+            child: ListTile(
+              leading: const Icon(Icons.palette_outlined),
+              title: Text(context.t(L.theme)),
+              subtitle: Text(RestStyle.selected.value.name),
+              trailing: const Icon(Icons.chevron_right_rounded),
+              onTap: () => Navigator.of(context).push(
+                MaterialPageRoute<void>(
+                  builder: (_) => const _ThemeSettingsScreen(),
+                ),
+              ),
+            ),
+          ),
+          Card(
+            child: ListTile(
+              leading: const Icon(Icons.language_rounded),
+              title: Text(context.t(L.language)),
+              subtitle: ValueListenableBuilder(
+                valueListenable: LanguagePreference.selected,
+                builder: (context, locale, _) => Text(
+                  locale == null ? context.t(L.system) : languageName(locale),
+                ),
+              ),
+              trailing: const Icon(Icons.chevron_right_rounded),
+              onTap: () => Navigator.of(context).push(
+                MaterialPageRoute<void>(
+                  builder: (_) => const LanguageSettingsScreen(),
+                ),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _ThemeSettingsScreen extends StatelessWidget {
+  const _ThemeSettingsScreen();
 
   Future<void> _selectTheme(BuildContext context, RestStyle style) async {
     RestStyle.selected.value = style;
@@ -14,62 +74,35 @@ class SettingsView extends StatelessWidget {
     } catch (error) {
       debugPrint('Could not save theme: $error');
       if (!context.mounted || RestStyle.selected.value != style) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Theme applied. REST couldn’t save it for next time.'),
-        ),
-      );
+      ScaffoldMessenger.of(context)
+          .showSnackBar(SnackBar(content: Text(context.t(L.themeSaveError))));
     }
   }
 
   @override
-  Widget build(BuildContext context) {
-    final current = RestStyle.of(context);
-    return SafeArea(
-      child: ListView(
-        padding: const EdgeInsets.fromLTRB(22, 24, 22, 32),
-        children: [
-          Text(
-            'Settings',
-            style: TextStyle(
-              color: current.text,
-              fontSize: 27,
-              fontWeight: FontWeight.w600,
-              letterSpacing: -0.7,
+  Widget build(BuildContext context) => Scaffold(
+    appBar: AppBar(title: Text(context.t(L.theme))),
+    body: SafeArea(
+      child: ValueListenableBuilder<RestStyle>(
+        valueListenable: RestStyle.selected,
+        builder: (context, selected, _) => ListView(
+          padding: const EdgeInsets.fromLTRB(22, 12, 22, 32),
+          children: [
+            Padding(
+              padding: const EdgeInsets.only(bottom: 16),
+              child: Text(context.t(L.chooseTheme)),
             ),
-          ),
-          const SizedBox(height: 22),
-          Text(
-            'Appearance',
-            style: TextStyle(
-              color: current.text,
-              fontSize: 18,
-              fontWeight: FontWeight.w600,
-            ),
-          ),
-          const SizedBox(height: 6),
-          Text(
-            'Tap a style to apply it.',
-            style: TextStyle(color: current.quaternary, fontSize: 13),
-          ),
-          const SizedBox(height: 16),
-          ValueListenableBuilder<RestStyle>(
-            valueListenable: RestStyle.selected,
-            builder: (context, selected, _) => Column(
-              children: [
-                for (final style in RestStyle.all)
-                  _StyleCard(
-                    style: style,
-                    selected: identical(style, selected),
-                    onTap: () => _selectTheme(context, style),
-                  ),
-              ],
-            ),
-          ),
-        ],
+            for (final style in RestStyle.all)
+              _StyleCard(
+                style: style,
+                selected: identical(style, selected),
+                onTap: () => _selectTheme(context, style),
+              ),
+          ],
+        ),
       ),
-    );
-  }
+    ),
+  );
 }
 
 class _StyleCard extends StatelessWidget {

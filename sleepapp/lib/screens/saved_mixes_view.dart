@@ -1,5 +1,7 @@
 import 'package:material_ui/material_ui.dart';
 
+import '../l10n/rest_strings.dart';
+import '../l10n/sound_strings.dart';
 import '../models/rest_style.dart';
 import '../models/sound.dart';
 import '../models/sound_mix.dart';
@@ -37,7 +39,7 @@ class SavedMixesView extends StatelessWidget {
             sliver: SliverList.list(
               children: [
                 Text(
-                  'Saved for later',
+                  context.t(L.savedForLater),
                   style: TextStyle(
                     color: style.text,
                     fontSize: 27,
@@ -47,7 +49,7 @@ class SavedMixesView extends StatelessWidget {
                 ),
                 const SizedBox(height: 6),
                 Text(
-                  'Your favorite layers, ready for bedtime.',
+                  context.t(L.savedDescription),
                   style: TextStyle(color: style.quaternary, fontSize: 13),
                 ),
                 const SizedBox(height: 22),
@@ -59,7 +61,7 @@ class SavedMixesView extends StatelessWidget {
                     color: style.panel,
                     child: ListTile(
                       leading: const Icon(Icons.event_repeat_rounded),
-                      title: const Text('Mix rotation'),
+                      title: Text(context.t(L.mixRotation)),
                       subtitle: Text(rotationSummary),
                       trailing: const Icon(Icons.chevron_right_rounded),
                       onTap: onRotation,
@@ -91,7 +93,7 @@ class SavedMixesView extends StatelessWidget {
                       SizedBox(width: 11),
                       Expanded(
                         child: Text(
-                          'Saved on this device. No account needed.',
+                          context.t(L.savedLocal),
                           style: TextStyle(
                             color: style.quaternary,
                             fontSize: 12,
@@ -142,7 +144,7 @@ class _EmptySaved extends StatelessWidget {
           ),
           const SizedBox(height: 15),
           Text(
-            'Your first mix is waiting',
+            context.t(L.firstMix),
             style: TextStyle(
               color: style.text,
               fontSize: 16,
@@ -151,7 +153,7 @@ class _EmptySaved extends StatelessWidget {
           ),
           const SizedBox(height: 7),
           Text(
-            'Combine a few sounds, adjust their levels, then save the mix here.',
+            context.t(L.combineSave),
             textAlign: TextAlign.center,
             style: TextStyle(
               color: style.quaternary,
@@ -163,7 +165,7 @@ class _EmptySaved extends StatelessWidget {
           FilledButton.tonalIcon(
             onPressed: onBrowse,
             icon: const Icon(Icons.surround_sound_rounded, size: 18),
-            label: const Text('Browse sounds'),
+            label: Text(context.t(L.browseSounds)),
           ),
         ],
       ),
@@ -190,7 +192,7 @@ class _SavedMixCard extends StatelessWidget {
     final mixSounds = sounds
         .where((sound) => mix.sounds.contains(sound.file))
         .toList();
-    final soundNames = mixSounds.map((sound) => sound.name).join(' · ');
+    final soundNames = mixSounds.map(context.soundName).join(' · ');
     final firstSound = mixSounds.isEmpty ? null : mixSounds.first;
 
     return Container(
@@ -227,7 +229,9 @@ class _SavedMixCard extends StatelessWidget {
                 ),
                 const SizedBox(height: 5),
                 Text(
-                  soundNames.isEmpty ? 'No sounds available' : soundNames,
+                  soundNames.isEmpty
+                      ? context.t(L.noAvailableSounds)
+                      : soundNames,
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
                   style: TextStyle(color: style.quaternary, fontSize: 11),
@@ -236,13 +240,13 @@ class _SavedMixCard extends StatelessWidget {
             ),
           ),
           IconButton(
-            tooltip: 'Delete ${mix.name}',
+            tooltip: context.t(L.deleteNamed, [mix.name]),
             onPressed: onDelete,
             icon: const Icon(Icons.delete_outline_rounded, size: 19),
             color: style.quaternary,
           ),
           IconButton.filledTonal(
-            tooltip: 'Play ${mix.name}',
+            tooltip: context.t(L.playNamed, [mix.name]),
             onPressed: onPlay,
             icon: const Icon(Icons.play_arrow_rounded, size: 22),
           ),

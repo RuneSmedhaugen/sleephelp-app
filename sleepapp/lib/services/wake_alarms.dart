@@ -4,6 +4,7 @@ import 'package:flutter/foundation.dart' show listEquals;
 import 'package:flutter/services.dart';
 import 'package:material_ui/material_ui.dart';
 
+import '../l10n/rest_strings.dart';
 import '../models/wake_playback.dart';
 
 class WakeAlarm {
@@ -63,7 +64,7 @@ class WakeAlarms extends ChangeNotifier {
   List<String> permissions = const [];
   String? ringingId;
   int lastRing = 0;
-  String? error;
+  L? error;
   bool ready = false;
   bool busy = false;
   bool _disposed = false;
@@ -72,6 +73,32 @@ class WakeAlarms extends ChangeNotifier {
   bool _visible = false;
   bool _playbackSession = false;
   int? _previewMinute;
+  Locale? _language;
+
+  Future<void> syncLanguage(RestStrings strings) async {
+    if (_language == strings.locale) return;
+    _language = strings.locale;
+    const labels = [
+      L.alarmTitle,
+      L.alarmAlertDetail,
+      L.alarmChannel,
+      L.snooze,
+      L.stop,
+      L.snoozeMinutes,
+      L.snoozeError,
+      L.alarmUpdateError,
+    ];
+    try {
+      await _channel.invokeMethod<void>('setLanguage', {
+        'locale': strings.locale.toLanguageTag(),
+        'labels': {for (final label in labels) label.name: strings.text(label)},
+      });
+    } on MissingPluginException {
+      // Alarms are unavailable on this platform.
+    } on PlatformException {
+      _language = null;
+    }
+  }
 
   WakePlayback? get nextWake {
     WakePlayback? earliest;
@@ -136,8 +163,8 @@ class WakeAlarms extends ChangeNotifier {
   Future<void> _refresh() async {
     try {
       if (await _readStatus()) _notify();
-    } on PlatformException catch (exception) {
-      error = exception.message ?? 'Could not read alarms.';
+    } on PlatformException {
+      error = L.alarmReadError;
       _notify();
     }
   }
@@ -210,15 +237,27 @@ class WakeAlarms extends ChangeNotifier {
     try {
       await _channel.invokeMethod<void>(method, arguments);
     } on PlatformException catch (exception) {
-      error = exception.message ?? 'Could not update the alarm.';
+      error = switch (exception.code) {
+        'exactRequired' => L.exactRequired,
+        'notificationsRequired' => L.notificationsRequired,
+        'iosRequired' => L.allowIosSettingsDetails,
+        'alarmInvalid' => L.alarmInvalid,
+        'alarmBusy' => L.alarmBusy,
+        _ => switch (method) {
+          'save' => L.alarmSaveError,
+          'delete' => L.alarmDeleteError,
+          'snooze' => L.snoozeError,
+          _ => L.alarmUpdateError,
+        },
+      };
       busy = false;
       _notify();
       return false;
     }
     try {
       await _readStatus();
-    } on PlatformException catch (exception) {
-      error = exception.message ?? 'Could not refresh the alarm list.';
+    } on PlatformException {
+      error = L.alarmRefreshError;
     } finally {
       busy = false;
       _notify();

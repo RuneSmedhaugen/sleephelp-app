@@ -7,10 +7,16 @@ import 'package:path_provider/path_provider.dart';
 
 import '../models/sound.dart';
 
+enum SoundImportError implements Exception {
+  unsupportedFormat,
+  emptyFile,
+  unreadable,
+}
+
 class ImportedSoundStorage {
   static const _extensions = ['mp3', 'm4a', 'wav'];
-  static const _audioTypes = XTypeGroup(
-    label: 'Audio files',
+  static XTypeGroup _audioTypes(String label) => XTypeGroup(
+    label: label,
     extensions: _extensions,
     mimeTypes: [
       'audio/mpeg',
@@ -51,11 +57,13 @@ class ImportedSoundStorage {
     return sounds;
   }
 
-  Future<Sound?> pickAndImport() async {
-    final source = await openFile(acceptedTypeGroups: [_audioTypes]);
+  Future<Sound?> pickAndImport({required String audioFilesLabel}) async {
+    final source = await openFile(
+      acceptedTypeGroups: [_audioTypes(audioFilesLabel)],
+    );
     if (source == null) return null;
     if (!_isSupported(source.name)) {
-      throw const FormatException('Choose an MP3, M4A, or WAV audio file.');
+      throw SoundImportError.unsupportedFormat;
     }
 
     final directory = await (await _directory()).create(recursive: true);
@@ -70,7 +78,7 @@ class ImportedSoundStorage {
         await sink.close();
       }
       if (await copy.length() == 0) {
-        throw const FormatException('This audio file is empty.');
+        throw SoundImportError.emptyFile;
       }
 
       await _checkPlayable(copy.path);
@@ -98,7 +106,7 @@ class ImportedSoundStorage {
     try {
       await player.setFilePath(path);
     } on PlayerException {
-      throw const FormatException('REST couldn’t read this audio file.');
+      throw SoundImportError.unreadable;
     } finally {
       await player.dispose();
     }

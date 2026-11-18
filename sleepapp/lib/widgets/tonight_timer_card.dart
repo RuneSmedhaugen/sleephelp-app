@@ -1,5 +1,6 @@
 import 'package:material_ui/material_ui.dart';
 
+import '../l10n/rest_strings.dart';
 import '../models/rest_style.dart';
 import '../models/wake_playback.dart';
 import '../services/sleep_audio_handler.dart';
@@ -56,11 +57,15 @@ class TonightTimerCard extends StatelessWidget {
               final fading = fade == Duration.zero;
               final title = active
                   ? alarm == null
-                        ? 'Sleep timer'
+                        ? context.t(L.sleepTimer)
                         : state.followsAlarm
-                        ? 'Following your ${formatSleepTime(context, alarm)} alarm'
-                        : 'Stops at your ${formatSleepTime(context, alarm)} alarm'
-                  : 'Playback plan';
+                        ? context.t(L.followingAlarm, [
+                            formatSleepTime(context, alarm),
+                          ])
+                        : context.t(L.stopsAtAlarm, [
+                            formatSleepTime(context, alarm),
+                          ])
+                  : context.t(L.playbackPlan);
               return Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
@@ -80,8 +85,8 @@ class TonightTimerCard extends StatelessWidget {
                         onPressed: onChange,
                         child: Text(
                           !active && plan.stopAt == null && !plan.blocked
-                              ? 'Set timer'
-                              : 'Change',
+                              ? context.t(L.setTimer)
+                              : context.t(L.change),
                         ),
                       ),
                     ],
@@ -94,9 +99,11 @@ class TonightTimerCard extends StatelessWidget {
                         if (fade != null) ...[
                           Expanded(
                             child: _CountdownReading(
-                              title: fading ? 'Fading now' : 'Fade starts in',
+                              title: fading
+                                  ? context.t(L.fadingNow)
+                                  : context.t(L.fadeStartsIn),
                               value: fading
-                                  ? _fadeProgress(state)
+                                  ? _fadeProgress(context, state)
                                   : _countdown(fade),
                               accent: style.secondary,
                             ),
@@ -105,7 +112,7 @@ class TonightTimerCard extends StatelessWidget {
                         ],
                         Expanded(
                           child: _CountdownReading(
-                            title: 'Silent in',
+                            title: context.t(L.silentIn),
                             value: _countdown(state.remaining),
                             accent: style.primary,
                           ),
@@ -116,15 +123,15 @@ class TonightTimerCard extends StatelessWidget {
                       const SizedBox(height: 12),
                       Text(
                         state.isRunning
-                            ? 'Playback paused · alarm deadline still counting'
-                            : 'Timer paused',
+                            ? context.t(L.pausedWithAlarm)
+                            : context.t(L.timerPaused),
                         style: TextStyle(color: style.text, fontSize: 12),
                       ),
                     ],
                   ] else
                     Text(
                       hasPlaybackSession && !plan.blocked
-                          ? 'No timer running'
+                          ? context.t(L.noTimerRunning)
                           : describeSleepPlan(context, plan),
                       style: TextStyle(
                         color: style.text,
@@ -151,10 +158,12 @@ class TonightTimerCard extends StatelessWidget {
     return '$hours:$minutes:$remainder';
   }
 
-  static String _fadeProgress(SleepTimerState state) {
+  static String _fadeProgress(BuildContext context, SleepTimerState state) {
     final remainingPortion =
         state.remaining.inMicroseconds / state.fadeOut.inMicroseconds;
-    return '${((1 - remainingPortion).clamp(0.0, 1.0) * 100).floor()}%';
+    return context.t(L.percent, [
+      ((1 - remainingPortion).clamp(0.0, 1.0) * 100).floor(),
+    ]);
   }
 }
 

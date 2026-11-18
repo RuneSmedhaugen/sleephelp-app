@@ -27,6 +27,14 @@ class SleepAudioHandler extends BaseAudioHandler {
   }
 
   final SleepPlayer Function() _playerFactory;
+
+  void updateMediaTitle(String title) {
+    final item = mediaItem.value;
+    if (item != null && item.title != title) {
+      mediaItem.add(item.copyWith(title: title));
+    }
+  }
+
   final Duration _timerTickInterval;
   final Map<String, SleepPlayer> _players = {};
   final Map<String, double> _soundVolumes = {};

@@ -1,5 +1,6 @@
 import 'package:material_ui/material_ui.dart';
 
+import '../l10n/rest_strings.dart';
 import '../models/mix_rotation.dart';
 import '../models/sound_mix.dart';
 
@@ -19,13 +20,13 @@ class MixRotationSheet extends StatefulWidget {
 
 class _MixRotationSheetState extends State<MixRotationSheet> {
   static const _weekdays = [
-    'Monday',
-    'Tuesday',
-    'Wednesday',
-    'Thursday',
-    'Friday',
-    'Saturday',
-    'Sunday',
+    L.monday,
+    L.tuesday,
+    L.wednesday,
+    L.thursday,
+    L.friday,
+    L.saturday,
+    L.sunday,
   ];
   late MixRotation _draft = widget.rotation;
 
@@ -57,14 +58,23 @@ class _MixRotationSheetState extends State<MixRotationSheet> {
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
               Text(
-                'Mix rotation',
+                context.t(L.mixRotation),
                 style: Theme.of(context).textTheme.titleLarge,
               ),
               const SizedBox(height: 12),
               SegmentedButton<MixRotationMode>(
                 segments: [
                   for (final mode in MixRotationMode.values)
-                    ButtonSegment(value: mode, label: Text(mode.label)),
+                    ButtonSegment(
+                      value: mode,
+                      label: Text(
+                        context.t(switch (mode) {
+                          MixRotationMode.off => L.off,
+                          MixRotationMode.daily => L.daily,
+                          MixRotationMode.weekly => L.weekly,
+                        }),
+                      ),
+                    ),
                 ],
                 selected: {_draft.mode},
                 showSelectedIcon: false,
@@ -77,22 +87,21 @@ class _MixRotationSheetState extends State<MixRotationSheet> {
                 child: ListView(
                   children: [
                     Text(switch (_draft.mode) {
-                      MixRotationMode.off =>
-                        'REST loads the last saved mix you played.',
-                      MixRotationMode.daily => 'Assign a mix to each day. The schedule repeats every week.',
-                      MixRotationMode.weekly => 'Each mix stays assigned Monday through Sunday. The sequence repeats after the last week.',
+                      MixRotationMode.off => context.t(L.rotationOff),
+                      MixRotationMode.daily => context.t(L.rotationDaily),
+                      MixRotationMode.weekly => context.t(L.rotationWeekly),
                     }),
                     if (daily || weekly) ...[
                       const SizedBox(height: 6),
-                      const Text(
-                        'Empty slots use the last saved mix you played.',
-                      ),
+                      Text(context.t(L.rotationEmpty)),
                       const SizedBox(height: 12),
                       for (var index = 0; index < slots.length; index++)
                         _slot(
                           context,
                           index,
-                          daily ? _weekdays[index] : 'Week ${index + 1}',
+                          daily
+                              ? context.t(_weekdays[index])
+                              : context.t(L.week, [index + 1]),
                           slots[index],
                           current: index == currentSlot,
                           removable: weekly && slots.length > 1,
@@ -108,7 +117,7 @@ class _MixRotationSheetState extends State<MixRotationSheet> {
                             ),
                           ),
                           icon: const Icon(Icons.add_rounded),
-                          label: const Text('Add week'),
+                          label: Text(context.t(L.addWeek)),
                         ),
                       ),
                   ],
@@ -123,7 +132,7 @@ class _MixRotationSheetState extends State<MixRotationSheet> {
                       : _draft;
                   Navigator.pop(context, rotation);
                 },
-                child: const Text('Save rotation'),
+                child: Text(context.t(L.saveRotation)),
               ),
             ],
           ),
@@ -148,7 +157,7 @@ class _MixRotationSheetState extends State<MixRotationSheet> {
           Expanded(
             child: InputDecorator(
               decoration: InputDecoration(
-                labelText: current ? '$label · Current' : label,
+                labelText: current ? context.t(L.currentSlot, [label]) : label,
                 contentPadding: const EdgeInsets.symmetric(
                   horizontal: 14,
                   vertical: 4,
@@ -159,9 +168,9 @@ class _MixRotationSheetState extends State<MixRotationSheet> {
                   isExpanded: true,
                   value: mixExists ? id : '',
                   items: [
-                    const DropdownMenuItem(
+                    DropdownMenuItem(
                       value: '',
-                      child: Text('Unassigned'),
+                      child: Text(context.t(L.unassigned)),
                     ),
                     for (final mix in widget.mixes)
                       DropdownMenuItem(
@@ -181,7 +190,7 @@ class _MixRotationSheetState extends State<MixRotationSheet> {
           ),
           if (removable)
             IconButton(
-              tooltip: 'Remove $label',
+              tooltip: context.t(L.removeNamed, [label]),
               onPressed: () => setState(
                 () => _draft = _draft.copyWith(
                   weeks: [..._draft.weeks]..removeAt(index),

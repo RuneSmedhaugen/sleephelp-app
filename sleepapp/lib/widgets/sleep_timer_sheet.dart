@@ -1,5 +1,6 @@
 import 'package:material_ui/material_ui.dart';
 
+import '../l10n/rest_strings.dart';
 import '../models/rest_style.dart';
 import '../models/wake_playback.dart';
 import 'sleep_plan_text.dart';
@@ -32,8 +33,8 @@ class SleepTimerSheet extends StatefulWidget {
 }
 
 class _SleepTimerSheetState extends State<SleepTimerSheet> {
-  static const _durations = [15, 30, 45, 60, 90];
-  static const _fades = [0, 2, 5, 10, 15];
+  static const _durations = [1, 2, 5, 15, 30, 45, 60, 90];
+  static const _fades = [0, 1, 2, 5, 10, 15];
 
   late int _durationMinutes;
   late int _fadeMinutes;
@@ -111,7 +112,7 @@ class _SleepTimerSheetState extends State<SleepTimerSheet> {
           ),
           const SizedBox(height: 25),
           Text(
-            'Sleep timer',
+            context.t(L.sleepTimer),
             style: TextStyle(
               color: style.text,
               fontSize: 23,
@@ -126,12 +127,12 @@ class _SleepTimerSheetState extends State<SleepTimerSheet> {
               runSpacing: 4,
               children: [
                 _TimerChoice(
-                  label: 'Follow alarm',
+                  label: context.t(L.followAlarm),
                   selected: _followAlarm,
                   onTap: () => setState(() => _followAlarm = true),
                 ),
                 _TimerChoice(
-                  label: 'Sleep timer tonight',
+                  label: context.t(L.sleepTimerTonight),
                   selected: !_followAlarm,
                   onTap: () => setState(() => _followAlarm = false),
                 ),
@@ -140,7 +141,7 @@ class _SleepTimerSheetState extends State<SleepTimerSheet> {
           ],
           if (!_followAlarm) ...[
             const SizedBox(height: 24),
-            const _TimerLabel('PLAY FOR'),
+            _TimerLabel(context.t(L.playFor)),
             const SizedBox(height: 11),
             Wrap(
               spacing: 8,
@@ -148,7 +149,7 @@ class _SleepTimerSheetState extends State<SleepTimerSheet> {
               children: [
                 for (final minutes in _durations)
                   _TimerChoice(
-                    label: '$minutes min',
+                    label: context.t(L.minutes, [minutes]),
                     selected: _durationMinutes == minutes,
                     onTap: () => setState(() {
                       _durationMinutes = minutes;
@@ -158,7 +159,7 @@ class _SleepTimerSheetState extends State<SleepTimerSheet> {
               ],
             ),
             const SizedBox(height: 23),
-            const _TimerLabel('FADE OVER'),
+            _TimerLabel(context.t(L.fadeOver)),
             const SizedBox(height: 11),
             Wrap(
               spacing: 8,
@@ -168,7 +169,9 @@ class _SleepTimerSheetState extends State<SleepTimerSheet> {
                   (minutes) => minutes <= _durationMinutes,
                 ))
                   _TimerChoice(
-                    label: minutes == 0 ? 'No fade' : '$minutes min',
+                    label: minutes == 0
+                        ? context.t(L.noFade)
+                        : context.t(L.minutes, [minutes]),
                     selected: _fadeMinutes == minutes,
                     onTap: () => setState(() => _fadeMinutes = minutes),
                   ),
@@ -205,7 +208,11 @@ class _SleepTimerSheetState extends State<SleepTimerSheet> {
                         height: 18,
                         child: CircularProgressIndicator(strokeWidth: 2),
                       )
-                    : Text(_followAlarm ? 'Follow alarm' : 'Set sleep timer'),
+                    : Text(
+                        context.t(
+                          _followAlarm ? L.followAlarm : L.setSleepTimer,
+                        ),
+                      ),
               ),
             ),
           ),
@@ -215,7 +222,7 @@ class _SleepTimerSheetState extends State<SleepTimerSheet> {
               width: double.infinity,
               child: TextButton(
                 onPressed: _saving ? null : _cancel,
-                child: const Text('Turn off sleep timer'),
+                child: Text(context.t(L.disableTimer)),
               ),
             ),
           ],
