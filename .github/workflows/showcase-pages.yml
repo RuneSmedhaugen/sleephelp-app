@@ -25,6 +25,9 @@ jobs:
       - uses: subosito/flutter-action@v2
         with:
           channel: stable
+      - name: Resolve Flutter packages
+        working-directory: sleepapp
+        run: flutter pub get
       - name: Build browser demo without bundled sound files
         working-directory: sleepapp
         run: ./tool/build_web_demo.ps1
