@@ -5,8 +5,8 @@
     "display": "standalone",
     "background_color": "#000000",
     "theme_color": "#000000",
-    "description": "Mix sounds for sleep.",
-    "orientation": "portrait-primary",
+    "description": "Explore the REST sleep sound mixer demo.",
+    "orientation": "any",
     "prefer_related_applications": false,
     "icons": [
         {

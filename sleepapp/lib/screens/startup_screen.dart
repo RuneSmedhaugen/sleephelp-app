@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:convert';
 
 import 'package:material_ui/material_ui.dart';
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/services.dart';
 
 import '../l10n/rest_strings.dart';
@@ -57,6 +58,37 @@ class _StartupScreenState extends State<StartupScreen>
 
   Future<_StartupData> _load() async {
     try {
+      if (kIsWeb) {
+        final sounds = [
+          Sound(
+            file: 'demo/rain',
+            name: 'Rain',
+            icon: Icons.water_drop_rounded,
+            category: 'Water',
+          ),
+          Sound(
+            file: 'demo/forest',
+            name: 'Forest ambience',
+            icon: Icons.forest_rounded,
+            category: 'Nature',
+          ),
+        ];
+        await LanguagePreference.restore();
+        final audio = SleepAudioHandler(listenForAudioSessionEvents: false);
+        final previewMix = SoundMix(
+          id: 'rest-showcase-preview',
+          name: 'Evening rain',
+          sounds: sounds.take(2).map((sound) => sound.file).toList(),
+          volumes: {for (final sound in sounds.take(2)) sound.file: 0.7},
+          updatedAt: DateTime.now(),
+        );
+        return (
+          audio,
+          sounds,
+          [previewMix],
+          (const MixRotation(), previewMix.id),
+        );
+      }
       final (audio, sounds, mixes, rotation, _, _) = await (
         initializeSleepAudio(),
         _loadSounds(),
@@ -135,6 +167,7 @@ class _StartupScreenState extends State<StartupScreen>
               savedMixes: mixes,
               rotation: rotation,
               lastPlayedId: lastPlayedId,
+              demoMode: kIsWeb,
             );
           } else if (snapshot.hasError) {
             screen = Scaffold(

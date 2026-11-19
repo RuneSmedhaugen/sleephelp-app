@@ -1,6 +1,13 @@
 part of 'rest_strings.dart';
 
 const _nb = <L, String>{
+  L.unloadCurrentMix: 'Tøm gjeldende miks',
+  L.unloadMixHint: 'Stopper avspillingen og fjerner lydene fra gjeldende miks. Lagrede mikser beholdes i biblioteket.',
+  L.mixUnloaded: 'Gjeldende miks er tømt',
+  L.mixUnloadError: 'Kunne ikke tømme gjeldende miks. Prøv igjen.',
+  L.bedsideView: 'Nattvisning',
+  L.comingSoon: 'Kommer snart',
+  L.bedsideComingSoon: 'En rolig nattvisning kommer snart.',
   L.yourSoundMix: 'Lydmiksen din',
   L.chooseSounds: 'Velg lyder',
   L.liveMixHint: 'Endringer i lyder og volum gjelder med en gang. Lagre for å beholde miksen i biblioteket.',

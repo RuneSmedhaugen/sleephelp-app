@@ -29,11 +29,18 @@ flutter:
   uses-material-design: true
 
   assets:
-    - assets/sounds/
-    - assets/sounds.json
     - assets/fonts/SpaceGrotesk-OFL.txt
+    - assets/fonts/CormorantGaramond-OFL.txt
+    - assets/fonts/Nunito-OFL.txt
 
   fonts:
+    - family: Nunito
+      fonts:
+        - asset: assets/fonts/Nunito-Variable.ttf
+    - family: Cormorant Garamond
+      fonts:
+        - asset: assets/fonts/CormorantGaramond-Italic.ttf
+          style: italic
     - family: Space Grotesk
       fonts:
         - asset: assets/fonts/SpaceGrotesk-Variable.ttf

@@ -1,6 +1,13 @@
 part of 'rest_strings.dart';
 
 const _fr = <L, String>{
+  L.unloadCurrentMix: 'Vider le mix actuel',
+  L.unloadMixHint: 'Arrête la lecture et retire les sons actuels. Les mix enregistrés restent dans votre bibliothèque.',
+  L.mixUnloaded: 'Mix actuel vidé',
+  L.mixUnloadError: 'Impossible de vider le mix actuel. Réessayez.',
+  L.bedsideView: 'Mode chevet',
+  L.comingSoon: 'Bientôt',
+  L.bedsideComingSoon: 'Un écran de chevet apaisant arrive bientôt.',
   L.yourSoundMix: 'Ton mix sonore',
   L.chooseSounds: 'Choisir des sons',
   L.liveMixHint: 'Les changements de sons et de volume s’appliquent immédiatement. Enregistre ce mix pour le conserver dans ta bibliothèque.',

@@ -1,6 +1,14 @@
 part of 'rest_strings.dart';
 
 const _de = <L, String>{
+  L.unloadCurrentMix: 'Aktuellen Mix leeren',
+  L.unloadMixHint: 'Stoppt die Wiedergabe und entfernt die aktuellen Klänge. Gespeicherte Mixe bleiben in deiner Bibliothek.',
+  L.mixUnloaded: 'Aktueller Mix geleert',
+  L.mixUnloadError:
+      'Der aktuelle Mix konnte nicht geleert werden. Bitte versuche es erneut.',
+  L.bedsideView: 'Nachttischmodus',
+  L.comingSoon: 'Demnächst',
+  L.bedsideComingSoon: 'Eine ruhige Nachttischansicht kommt bald.',
   L.yourSoundMix: 'Dein Soundmix',
   L.chooseSounds: 'Sounds auswählen',
   L.liveMixHint: 'Änderungen an Sounds und Lautstärke werden sofort übernommen. Speichere diesen Mix, um ihn in deiner Bibliothek zu behalten.',

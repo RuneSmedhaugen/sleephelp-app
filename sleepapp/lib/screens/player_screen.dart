@@ -16,6 +16,7 @@ import '../services/mix_storage.dart';
 import '../services/sleep_audio_handler.dart';
 import '../services/wake_alarms.dart';
 import '../widgets/sleep_timer_sheet.dart';
+import '../widgets/rest_artwork.dart';
 import '../widgets/mix_name_dialog.dart';
 import '../widgets/mix_editor_sheet.dart';
 import '../widgets/mix_rotation_sheet.dart';
@@ -33,6 +34,7 @@ class PlayerScreen extends StatefulWidget {
     required this.savedMixes,
     required this.rotation,
     required this.lastPlayedId,
+    this.demoMode = false,
   });
 
   final SleepAudioHandler audio;
@@ -40,6 +42,7 @@ class PlayerScreen extends StatefulWidget {
   final List<SoundMix> savedMixes;
   final MixRotation rotation;
   final String? lastPlayedId;
+  final bool demoMode;
 
   @override
   State<PlayerScreen> createState() => _PlayerScreenState();
@@ -97,6 +100,11 @@ class _PlayerScreenState extends State<PlayerScreen> {
     _savedMixes = widget.savedMixes;
     _rotation = widget.rotation;
     _lastPlayedId = widget.lastPlayedId;
+    if (widget.demoMode) {
+      _wakeAlarms
+        ..permissions = ['unsupported']
+        ..ready = true;
+    }
     _isPlaying = _audio.isPlaying;
     _hadPlaybackSession = _audio.hasPlaybackSession;
     _audio.refreshAlarmSchedule = _wakeAlarms.refresh;
@@ -356,6 +364,7 @@ class _PlayerScreenState extends State<PlayerScreen> {
   }
 
   Future<void> _togglePlayback() async {
+    if (widget.demoMode) return;
     if (_switchingMix || _busySounds.isNotEmpty) return;
     try {
       if (_audio.isPlaying) {
@@ -379,6 +388,7 @@ class _PlayerScreenState extends State<PlayerScreen> {
   }
 
   Future<void> _stopPlayback() async {
+    if (widget.demoMode) return;
     try {
       await _audio.stop();
     } catch (error) {
@@ -497,7 +507,33 @@ class _PlayerScreenState extends State<PlayerScreen> {
     ),
   );
 
+  Future<bool> _unloadCurrentMix() async {
+    if (_switchingMix || _busySounds.isNotEmpty) return false;
+    _switchingMix = true;
+    _followRotation = false;
+    try {
+      await _audio.stop();
+      final cleared = await _audio.replaceMix(
+        {},
+        {},
+        onlyWhenIdle: true,
+        restoreTimer: true,
+      );
+      if (!cleared) return false;
+      _loadedMixId = null;
+      _loadedMixUpdatedAt = null;
+      _showLocalized(L.mixUnloaded);
+      return true;
+    } catch (error) {
+      debugPrint('Could not unload current mix: $error');
+      return false;
+    } finally {
+      _finishMixChange();
+    }
+  }
+
   Future<void> _openMixer() async {
+    if (_switchingMix) return;
     _followRotation = false;
     final original = _savedMix(_loadedMixId);
     final timer = MixTimerSettings(
@@ -522,6 +558,7 @@ class _PlayerScreenState extends State<PlayerScreen> {
         isSavedMix: original != null,
         sounds: _sounds,
         suggestedTimer: timer,
+        onUnload: _unloadCurrentMix,
         onSoundToggle: (sound) async {
           await _toggleSound(sound);
           return _audio.selectedSounds.contains(sound.file);
@@ -578,6 +615,7 @@ class _PlayerScreenState extends State<PlayerScreen> {
   }
 
   Future<void> _loadSavedMix(SoundMix mix) async {
+    if (widget.demoMode) return;
     if (_switchingMix || _busySounds.isNotEmpty) return;
     _switchingMix = true;
     _followRotation = false;
@@ -706,29 +744,39 @@ class _PlayerScreenState extends State<PlayerScreen> {
         timerState: _audio.sleepTimerState,
         timerStates: _audio.sleepTimerStates,
         plannedTimer: _audio.previewSleepPlan(),
-        onPlayPause: _togglePlayback,
-        onStop: _stopPlayback,
-        onTimer: _showTimer,
-        onOpenMixer: _openMixer,
+        onPlayPause: widget.demoMode ? () {} : _togglePlayback,
+        onStop: widget.demoMode ? () {} : _stopPlayback,
+        onTimer: widget.demoMode ? () {} : _showTimer,
+        onOpenMixer: widget.demoMode ? () {} : _openMixer,
         onMasterVolumeChanged: _setMasterVolume,
       ),
       LibraryView(
         sounds: _sounds,
         selectedSounds: selected,
-        onToggleSound: (sound) => unawaited(_toggleSound(sound)),
-        onImport: _importSound,
+        onToggleSound: widget.demoMode
+            ? (_) {}
+            : (sound) => unawaited(_toggleSound(sound)),
+        onImport: widget.demoMode ? null : _importSound,
       ),
       SavedMixesView(
         mixes: _savedMixes,
         sounds: _sounds,
-        onLoad: (mix) => unawaited(_loadSavedMix(mix)),
+        onLoad: widget.demoMode
+            ? (_) {}
+            : (mix) => unawaited(_loadSavedMix(mix)),
         onDelete: (mix) => unawaited(_deleteSavedMix(mix)),
-        onEdit: (mix) => unawaited(_editSavedMix(mix)),
-        onRename: (mix) => unawaited(_renameSavedMix(mix)),
-        onDuplicate: (mix) => unawaited(_duplicateSavedMix(mix)),
+        onEdit: widget.demoMode
+            ? (_) {}
+            : (mix) => unawaited(_editSavedMix(mix)),
+        onRename: widget.demoMode
+            ? (_) {}
+            : (mix) => unawaited(_renameSavedMix(mix)),
+        onDuplicate: widget.demoMode
+            ? (_) {}
+            : (mix) => unawaited(_duplicateSavedMix(mix)),
         onBrowse: () => setState(() => _activeTab = 1),
         rotationSummary: _rotationSummary,
-        onRotation: _editRotation,
+        onRotation: widget.demoMode ? () {} : _editRotation,
       ),
       AlarmsView(alarms: _wakeAlarms),
       const SettingsView(),
@@ -736,14 +784,9 @@ class _PlayerScreenState extends State<PlayerScreen> {
 
     return Scaffold(
       backgroundColor: Theme.of(context).scaffoldBackgroundColor,
-      body: DecoratedBox(
-        decoration: BoxDecoration(
-          gradient: RadialGradient(
-            center: Alignment.topRight,
-            radius: 1.15,
-            colors: [style.backgroundHighlight, style.background],
-          ),
-        ),
+      body: RestArtworkPanel(
+        style: style,
+        fullScene: true,
         child: Column(
           children: [
             RingingAlarmBanner(alarms: _wakeAlarms),

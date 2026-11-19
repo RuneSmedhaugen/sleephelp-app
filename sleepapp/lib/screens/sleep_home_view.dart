@@ -4,6 +4,7 @@ import '../l10n/rest_strings.dart';
 import '../models/rest_style.dart';
 import '../models/wake_playback.dart';
 import '../services/sleep_audio_handler.dart';
+import '../widgets/tonight_panel.dart';
 import '../widgets/tonight_timer_card.dart';
 
 class SleepHomeView extends StatelessWidget {
@@ -48,70 +49,200 @@ class SleepHomeView extends StatelessWidget {
         : mixName ?? context.t(L.yourSoundMix);
     final count = RestStrings.of(context)
         .count(selectedSoundCount, L.layerCountOne, L.layerCountOther);
-    return CustomScrollView(
-      physics: const BouncingScrollPhysics(),
-      slivers: [
-        SliverPadding(
-          padding: const EdgeInsets.fromLTRB(22, 18, 22, 32),
-          sliver: SliverList.list(
+    final details = Column(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        TonightTimerCard(
+          initialState: timerState,
+          states: timerStates,
+          plan: plannedTimer,
+          hasPlaybackSession: hasPlaybackSession,
+          isPlaying: isPlaying,
+          onChange: onTimer,
+          embedded: true,
+        ),
+        const SizedBox(height: 16),
+        Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+          child: Column(
             children: [
-              const _TopGreeting(),
-              const SizedBox(height: 22),
-              TonightTimerCard(
-                initialState: timerState,
-                states: timerStates,
-                plan: plannedTimer,
-                hasPlaybackSession: hasPlaybackSession,
-                isPlaying: isPlaying,
-                onChange: onTimer,
-              ),
-              const SizedBox(height: 24),
-              Material(
-                color: style.panel,
-                borderRadius: BorderRadius.circular(21),
-                child: ListTile(
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(21),
-                  ),
-                  contentPadding: const EdgeInsets.symmetric(
-                    horizontal: 17,
-                    vertical: 8,
-                  ),
-                  leading: Icon(Icons.graphic_eq_rounded, color: style.primary),
-                  title: Text(
-                    title,
-                    maxLines: 2,
-                    overflow: TextOverflow.ellipsis,
-                  ),
-                  subtitle: Text(
-                    hasUnsavedChanges
-                        ? '$count · ${context.t(L.unsavedChanges)}'
-                        : count,
-                  ),
-                  trailing: const Icon(Icons.chevron_right_rounded),
-                  onTap: onOpenMixer,
+              Text(
+                title,
+                textAlign: TextAlign.center,
+                style: TextStyle(
+                  color: style.text,
+                  fontSize: 23,
+                  fontWeight: FontWeight.w500,
                 ),
               ),
-              if (selectedSoundCount > 0) ...[
-                const SizedBox(height: 12),
-                _PlaybackCard(
-                  isPlaying: isPlaying,
-                  canStop: hasPlaybackSession,
-                  mixName: null,
-                  count: selectedSoundCount,
-                  onPlayPause: onPlayPause,
-                  onStop: onStop,
+              const SizedBox(height: 6),
+              Text(
+                hasUnsavedChanges
+                    ? '$count · ${context.t(L.unsavedChanges)}'
+                    : count,
+                textAlign: TextAlign.center,
+                style: TextStyle(
+                  color: style.text.withValues(alpha: 0.76),
+                  fontSize: 13,
                 ),
-              ],
-              const SizedBox(height: 12),
-              _MasterVolumeCard(
-                value: masterVolume,
-                onChanged: onMasterVolumeChanged,
               ),
             ],
           ),
         ),
       ],
+    );
+    final controls = Column(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Tooltip(
+          message: context.t(L.bedsideComingSoon),
+          child: TonightPanel(
+            radius: 22,
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 14),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Icon(Icons.bedtime_outlined, color: style.primary, size: 20),
+                  const SizedBox(width: 10),
+                  Flexible(
+                    child: Text(
+                      context.t(L.bedsideView),
+                      style: TextStyle(color: style.text, fontSize: 14),
+                    ),
+                  ),
+                  const SizedBox(width: 10),
+                  Flexible(
+                    child: Text(
+                      context.t(L.comingSoon),
+                      style: TextStyle(
+                        color: style.text.withValues(alpha: 0.65),
+                        fontSize: 11,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ),
+        const SizedBox(height: 24),
+        _MasterVolume(value: masterVolume, onChanged: onMasterVolumeChanged),
+        const SizedBox(height: 18),
+        Row(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            _RoundControl(
+              icon: Icons.timer_outlined,
+              label: context.t(L.sleepTimer),
+              onPressed: onTimer,
+            ),
+            const SizedBox(width: 28),
+            Container(
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                boxShadow: [
+                  BoxShadow(
+                    color: style.primary.withValues(alpha: 0.08),
+                    blurRadius: 24,
+                  ),
+                ],
+              ),
+              child: IconButton(
+                tooltip: isPlaying ? context.t(L.pause) : context.t(L.play),
+                onPressed: selectedSoundCount == 0 ? onOpenMixer : onPlayPause,
+                icon: Icon(
+                  isPlaying ? Icons.pause_rounded : Icons.play_arrow_rounded,
+                  size: 42,
+                ),
+                style: IconButton.styleFrom(
+                  backgroundColor: style
+                      .tint(style.primary, 0.14)
+                      .withValues(alpha: 0.90),
+                  foregroundColor: Color.lerp(style.primary, style.text, 0.40),
+                  side: BorderSide(
+                    color: style.primary.withValues(alpha: 0.32),
+                  ),
+                  fixedSize: const Size(80, 80),
+                ),
+              ),
+            ),
+            const SizedBox(width: 28),
+            _RoundControl(
+              icon: Icons.graphic_eq_rounded,
+              label: context.t(L.editMix),
+              onPressed: onOpenMixer,
+            ),
+          ],
+        ),
+        const SizedBox(height: 8),
+        SizedBox(
+          height: 48,
+          child: hasPlaybackSession
+              ? TextButton.icon(
+                  onPressed: onStop,
+                  icon: const Icon(Icons.stop_rounded, size: 17),
+                  label: Text(context.t(L.stopReset)),
+                  style: TextButton.styleFrom(
+                    foregroundColor: style.text.withValues(alpha: 0.85),
+                  ),
+                )
+              : Center(
+                  child: Text(
+                    context.t(L.readyToPlay),
+                    style: TextStyle(
+                      color: style.text.withValues(alpha: 0.70),
+                      fontSize: 12,
+                    ),
+                  ),
+                ),
+        ),
+      ],
+    );
+    return SafeArea(
+      child: LayoutBuilder(
+        builder: (context, constraints) {
+          final landscape =
+              constraints.maxWidth > constraints.maxHeight &&
+              constraints.maxWidth >= 600;
+          return SingleChildScrollView(
+            physics: const BouncingScrollPhysics(),
+            padding: const EdgeInsets.fromLTRB(24, 22, 24, 12),
+            child: Center(
+              child: ConstrainedBox(
+                constraints: BoxConstraints(
+                  maxWidth: landscape ? 1000 : 540,
+                  minHeight: (constraints.maxHeight - 34).clamp(
+                    0.0,
+                    double.infinity,
+                  ),
+                ),
+                child: Column(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    const _TopGreeting(),
+                    const SizedBox(height: 24),
+                    if (landscape)
+                      Row(
+                        crossAxisAlignment: CrossAxisAlignment.center,
+                        children: [
+                          Expanded(child: details),
+                          const SizedBox(width: 36),
+                          Expanded(child: controls),
+                        ],
+                      )
+                    else ...[
+                      details,
+                      const SizedBox(height: 36),
+                      controls,
+                    ],
+                  ],
+                ),
+              ),
+            ),
+          );
+        },
+      ),
     );
   }
 }
@@ -122,41 +253,34 @@ class _TopGreeting extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final style = RestStyle.of(context);
-    return Row(
+    return Column(
       children: [
-        Container(
-          width: 40,
-          height: 40,
-          decoration: BoxDecoration(
-            color: style.raised,
-            borderRadius: BorderRadius.circular(14),
-          ),
-          child: Icon(Icons.nightlight_round, color: style.primary, size: 21),
-        ),
-        const SizedBox(width: 12),
-        Expanded(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                context.t(L.nightSounds),
-                style: TextStyle(
-                  color: style.quaternary,
-                  fontSize: 10,
-                  letterSpacing: 1.8,
-                  fontWeight: FontWeight.w700,
-                ),
-              ),
-              SizedBox(height: 2),
-              Text(
-                context.t(L.settleIn),
-                style: TextStyle(
-                  color: style.text,
-                  fontSize: 20,
-                  fontWeight: FontWeight.w600,
-                ),
+        Text(
+          'R.E.S.T.',
+          textAlign: TextAlign.center,
+          style: TextStyle(
+            color: style.text,
+            fontFamily: 'Space Grotesk',
+            fontSize: 34,
+            letterSpacing: 6,
+            fontWeight: FontWeight.w300,
+            shadows: [
+              Shadow(
+                color: style.primary.withValues(alpha: 0.10),
+                blurRadius: 18,
               ),
             ],
+          ),
+        ),
+        const SizedBox(height: 8),
+        Text(
+          context.t(L.settleIn),
+          textAlign: TextAlign.center,
+          style: TextStyle(
+            color: style.text.withValues(alpha: 0.88),
+            fontFamily: 'Cormorant Garamond',
+            fontStyle: FontStyle.italic,
+            fontSize: 25,
           ),
         ),
       ],
@@ -164,139 +288,73 @@ class _TopGreeting extends StatelessWidget {
   }
 }
 
-class _PlaybackCard extends StatelessWidget {
-  const _PlaybackCard({
-    required this.isPlaying,
-    required this.canStop,
-    required this.mixName,
-    required this.count,
-    required this.onPlayPause,
-    required this.onStop,
+class _RoundControl extends StatelessWidget {
+  const _RoundControl({
+    required this.icon,
+    required this.label,
+    required this.onPressed,
   });
-
-  final bool isPlaying;
-  final bool canStop;
-  final String? mixName;
-  final int count;
-  final VoidCallback onPlayPause;
-  final VoidCallback onStop;
+  final IconData icon;
+  final String label;
+  final VoidCallback onPressed;
 
   @override
   Widget build(BuildContext context) {
     final style = RestStyle.of(context);
-    return Container(
-      padding: const EdgeInsets.fromLTRB(17, 12, 10, 12),
-      decoration: BoxDecoration(
-        gradient: LinearGradient(
-          colors: [style.tint(style.primary, 0.17), style.panel],
+    return TonightPanel(
+      radius: 28,
+      child: IconButton(
+        tooltip: label,
+        onPressed: onPressed,
+        icon: Icon(icon),
+        style: IconButton.styleFrom(
+          foregroundColor: style.text,
+          fixedSize: const Size(54, 54),
         ),
-        borderRadius: BorderRadius.circular(21),
-        border: Border.all(color: style.primary.withValues(alpha: 0.11)),
-      ),
-      child: Row(
-        children: [
-          Container(
-            width: 42,
-            height: 42,
-            decoration: BoxDecoration(
-              color: style.primary.withValues(alpha: 0.12),
-              shape: BoxShape.circle,
-            ),
-            child: Icon(
-              isPlaying ? Icons.graphic_eq_rounded : Icons.music_note_rounded,
-              color: style.primary,
-              size: 20,
-            ),
-          ),
-          const SizedBox(width: 12),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  isPlaying
-                      ? context.t(L.playingSoftly)
-                      : context.t(L.readyToPlay),
-                  style: TextStyle(
-                    color: style.text,
-                    fontSize: 14,
-                    fontWeight: FontWeight.w600,
-                  ),
-                ),
-                const SizedBox(height: 3),
-                Text(
-                  mixName ??
-                      RestStrings.of(context)
-                          .count(count, L.layerCountOne, L.layerCountOther),
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: TextStyle(color: style.quaternary, fontSize: 12),
-                ),
-              ],
-            ),
-          ),
-          IconButton(
-            tooltip: isPlaying ? context.t(L.pause) : context.t(L.play),
-            onPressed: onPlayPause,
-            icon: Icon(
-              isPlaying ? Icons.pause_rounded : Icons.play_arrow_rounded,
-              size: 25,
-            ),
-            style: IconButton.styleFrom(
-              backgroundColor: style.primary,
-              foregroundColor: style.onAccent,
-              fixedSize: const Size(48, 48),
-            ),
-          ),
-          IconButton(
-            tooltip: context.t(L.stopReset),
-            onPressed: canStop ? onStop : null,
-            icon: const Icon(Icons.stop_rounded, size: 22),
-            color: style.stopAccent ?? style.quaternary,
-          ),
-        ],
       ),
     );
   }
 }
 
-class _MasterVolumeCard extends StatelessWidget {
-  const _MasterVolumeCard({required this.value, required this.onChanged});
+class _MasterVolume extends StatelessWidget {
+  const _MasterVolume({required this.value, required this.onChanged});
   final double value;
   final ValueChanged<double> onChanged;
 
   @override
   Widget build(BuildContext context) {
     final style = RestStyle.of(context);
-    return Container(
-      padding: const EdgeInsets.fromLTRB(15, 11, 15, 9),
-      decoration: BoxDecoration(
-        color: style.panel,
-        borderRadius: BorderRadius.circular(19),
-      ),
-      child: Row(
-        children: [
-          Icon(
-            Icons.tune_rounded,
-            size: 18,
-            color: style.volumeAccent ?? style.primary,
-          ),
-          const SizedBox(width: 10),
-          Text(
-            context.t(L.masterVolume),
-            style: TextStyle(color: style.text, fontSize: 13),
-          ),
-          Expanded(
-            child: Slider(
+    return TonightPanel(
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(16, 12, 16, 4),
+        child: Column(
+          children: [
+            Row(
+              children: [
+                Icon(
+                  Icons.volume_down_rounded,
+                  color: style.volumeAccent ?? style.primary,
+                  size: 20,
+                ),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Text(
+                    context.t(L.masterVolume),
+                    style: TextStyle(color: style.text, fontSize: 13),
+                  ),
+                ),
+                Text(
+                  context.t(L.percent, [(value * 100).round()]),
+                  style: TextStyle(color: style.text, fontSize: 12),
+                ),
+              ],
+            ),
+            Slider(
               value: value.clamp(0.0, 1.0).toDouble(),
               onChanged: onChanged,
             ),
-          ),
-          Text(
-            context.t(L.percent, [(value * 100).round()]),
-            style: TextStyle(color: style.quaternary, fontSize: 11),
-          ),
-        ],
+          ],
+        ),
       ),
     );
   }

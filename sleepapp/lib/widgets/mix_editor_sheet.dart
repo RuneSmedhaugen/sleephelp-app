@@ -20,6 +20,7 @@ class MixEditorSheet extends StatefulWidget {
     this.onVolumeChanged,
     this.isSavedMix = true,
     this.originalMix,
+    this.onUnload,
   });
 
   final SoundMix mix;
@@ -30,6 +31,7 @@ class MixEditorSheet extends StatefulWidget {
   final Future<double> Function(String, double)? onVolumeChanged;
   final bool isSavedMix;
   final SoundMix? originalMix;
+  final Future<bool> Function()? onUnload;
 
   @override
   State<MixEditorSheet> createState() => _MixEditorSheetState();
@@ -51,6 +53,9 @@ class _MixEditorSheetState extends State<MixEditorSheet> {
   late int _fadeMinutes = _initialTimer.fade.inMinutes;
   bool _saving = false;
   bool _failed = false;
+  bool _unloading = false;
+  bool _unloadFailed = false;
+  bool get _busy => _saving || _unloading;
   final Set<String> _changingSounds = {};
 
   SoundMix get _original => widget.originalMix ?? widget.mix;
@@ -74,6 +79,7 @@ class _MixEditorSheetState extends State<MixEditorSheet> {
   }
 
   Future<void> _toggleSound(Sound sound) async {
+    if (_busy) return;
     if (_changingSounds.contains(sound.file)) return;
     setState(() => _changingSounds.add(sound.file));
     final liveToggle = widget.onSoundToggle;
@@ -103,6 +109,7 @@ class _MixEditorSheetState extends State<MixEditorSheet> {
   }
 
   Future<void> _changeVolume(String file, double value) async {
+    if (_busy) return;
     setState(() => _volumes[file] = value);
     final change = widget.onVolumeChanged;
     if (change == null) return;
@@ -143,14 +150,16 @@ class _MixEditorSheetState extends State<MixEditorSheet> {
   );
 
   Future<void> _save(bool saveAsNew) async {
-    if (_saving ||
+    if (_busy ||
         _changingSounds.isNotEmpty ||
         _selected.isEmpty ||
-        _name.text.trim().isEmpty)
+        _name.text.trim().isEmpty) {
       return;
+    }
     setState(() {
       _saving = true;
       _failed = false;
+      _unloadFailed = false;
     });
     var saved = false;
     try {
@@ -183,6 +192,28 @@ class _MixEditorSheetState extends State<MixEditorSheet> {
     if (saved) Navigator.pop(context);
   }
 
+  Future<void> _unload() async {
+    final unload = widget.onUnload;
+    if (unload == null || _busy || _changingSounds.isNotEmpty) return;
+    setState(() {
+      _unloading = true;
+      _unloadFailed = false;
+      _failed = false;
+    });
+    var cleared = false;
+    try {
+      cleared = await unload();
+    } catch (error) {
+      debugPrint('Could not unload the mix: $error');
+    }
+    if (!mounted) return;
+    setState(() {
+      _unloading = false;
+      _unloadFailed = !cleared;
+    });
+    if (cleared) Navigator.pop(context);
+  }
+
   Sound _sound(String file) => widget.sounds.firstWhere(
     (sound) => sound.file == file,
     orElse: () => Sound(
@@ -197,7 +228,7 @@ class _MixEditorSheetState extends State<MixEditorSheet> {
   Widget build(BuildContext context) {
     final valid = _selected.isNotEmpty && _name.text.trim().isNotEmpty;
     return PopScope(
-      canPop: !_saving,
+      canPop: !_busy,
       child: FractionallySizedBox(
         heightFactor: 0.92,
         child: SafeArea(
@@ -224,16 +255,18 @@ class _MixEditorSheetState extends State<MixEditorSheet> {
                       tooltip: context.t(
                         widget.onSoundToggle == null ? L.cancel : L.done,
                       ),
-                      onPressed: _saving ? null : () => Navigator.pop(context),
+                      onPressed: _busy ? null : () => Navigator.pop(context),
                       icon: const Icon(Icons.close_rounded),
                     ),
                   ],
                 ),
-                if (_failed)
+                if (_failed || _unloadFailed)
                   Padding(
                     padding: const EdgeInsets.only(bottom: 12),
                     child: Text(
-                      context.t(L.mixSaveError),
+                      context.t(
+                        _unloadFailed ? L.mixUnloadError : L.mixSaveError,
+                      ),
                       style: TextStyle(
                         color: Theme.of(context).colorScheme.error,
                       ),
@@ -254,7 +287,7 @@ class _MixEditorSheetState extends State<MixEditorSheet> {
                       const SizedBox(height: 16),
                       TextField(
                         controller: _name,
-                        enabled: !_saving,
+                        enabled: !_busy,
                         maxLength: 32,
                         textCapitalization: TextCapitalization.sentences,
                         onChanged: (_) => setState(() {}),
@@ -268,7 +301,7 @@ class _MixEditorSheetState extends State<MixEditorSheet> {
                           child: Text(context.t(L.unsavedChanges)),
                         ),
                       OutlinedButton.icon(
-                        onPressed: _saving ? null : _addSounds,
+                        onPressed: _busy ? null : _addSounds,
                         icon: const Icon(Icons.add_rounded),
                         label: Text(context.t(L.addSounds)),
                       ),
@@ -278,7 +311,7 @@ class _MixEditorSheetState extends State<MixEditorSheet> {
                         title: Text(context.t(L.rememberMixTimer)),
                         subtitle: Text(context.t(L.mixTimerHint)),
                         value: _rememberTimer,
-                        onChanged: _saving
+                        onChanged: _busy
                             ? null
                             : (value) => setState(() => _rememberTimer = value),
                       ),
@@ -309,7 +342,7 @@ class _MixEditorSheetState extends State<MixEditorSheet> {
                                 ),
                               ),
                           ],
-                          onChanged: _saving
+                          onChanged: _busy
                               ? null
                               : (minutes) => setState(() {
                                   _timerMinutes = minutes!;
@@ -345,7 +378,7 @@ class _MixEditorSheetState extends State<MixEditorSheet> {
                                   ),
                                 ),
                             ],
-                            onChanged: _saving
+                            onChanged: _busy
                                 ? null
                                 : (minutes) =>
                                       setState(() => _fadeMinutes = minutes!),
@@ -355,7 +388,7 @@ class _MixEditorSheetState extends State<MixEditorSheet> {
                       ],
                       if (_selected.isEmpty) Text(context.t(L.addBeforeSave)),
                       AbsorbPointer(
-                        absorbing: _saving,
+                        absorbing: _busy,
                         child: Column(
                           children: [
                             for (final file in _selected)
@@ -375,7 +408,7 @@ class _MixEditorSheetState extends State<MixEditorSheet> {
                         FilledButton(
                           onPressed:
                               !valid ||
-                                  _saving ||
+                                  _busy ||
                                   _changingSounds.isNotEmpty ||
                                   !_changed
                               ? null
@@ -385,8 +418,7 @@ class _MixEditorSheetState extends State<MixEditorSheet> {
                           ),
                         ),
                       TextButton(
-                        onPressed:
-                            !valid || _saving || _changingSounds.isNotEmpty
+                        onPressed: !valid || _busy || _changingSounds.isNotEmpty
                             ? null
                             : () => _save(true),
                         child: Text(
@@ -395,6 +427,25 @@ class _MixEditorSheetState extends State<MixEditorSheet> {
                           ),
                         ),
                       ),
+                      if (widget.onUnload != null) ...[
+                        const SizedBox(height: 20),
+                        const Divider(),
+                        TextButton.icon(
+                          onPressed:
+                              _busy ||
+                                  _changingSounds.isNotEmpty ||
+                                  (_selected.isEmpty && !widget.isSavedMix)
+                              ? null
+                              : _unload,
+                          icon: const Icon(Icons.playlist_remove_rounded),
+                          label: Text(context.t(L.unloadCurrentMix)),
+                        ),
+                        Text(
+                          context.t(L.unloadMixHint),
+                          textAlign: TextAlign.center,
+                          style: Theme.of(context).textTheme.bodySmall,
+                        ),
+                      ],
                     ],
                   ),
                 ),

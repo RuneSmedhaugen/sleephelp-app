@@ -1,6 +1,13 @@
 part of 'rest_strings.dart';
 
 const _en = <L, String>{
+  L.unloadCurrentMix: 'Unload current mix',
+  L.unloadMixHint: 'Stops playback and clears the current sounds. Saved mixes stay in your library.',
+  L.mixUnloaded: 'Current mix unloaded',
+  L.mixUnloadError: 'Could not unload the current mix. Please try again.',
+  L.bedsideView: 'Bedside view',
+  L.comingSoon: 'Coming soon',
+  L.bedsideComingSoon: 'A quiet bedside screen is coming soon.',
   L.yourSoundMix: 'Your sound mix',
   L.chooseSounds: 'Choose sounds',
   L.liveMixHint: 'Sound and volume changes apply immediately. Save to keep this mix in your library.',

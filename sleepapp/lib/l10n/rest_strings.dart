@@ -8,6 +8,13 @@ part 'messages_es.dart';
 part 'messages_de.dart';
 
 enum L {
+  unloadCurrentMix,
+  unloadMixHint,
+  mixUnloaded,
+  mixUnloadError,
+  bedsideView,
+  comingSoon,
+  bedsideComingSoon,
   settings,
   theme,
   language,

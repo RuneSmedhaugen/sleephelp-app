@@ -4,7 +4,7 @@ import '../l10n/rest_strings.dart';
 import '../models/rest_style.dart';
 import '../models/wake_playback.dart';
 import '../services/sleep_audio_handler.dart';
-import 'rest_artwork.dart';
+import 'tonight_panel.dart';
 import 'sleep_plan_text.dart';
 
 class TonightTimerCard extends StatelessWidget {
@@ -16,6 +16,7 @@ class TonightTimerCard extends StatelessWidget {
     required this.hasPlaybackSession,
     required this.isPlaying,
     required this.onChange,
+    this.embedded = false,
   });
 
   final SleepTimerState initialState;
@@ -24,128 +25,126 @@ class TonightTimerCard extends StatelessWidget {
   final bool hasPlaybackSession;
   final bool isPlaying;
   final VoidCallback onChange;
+  final bool embedded;
 
   @override
   Widget build(BuildContext context) {
     final style = RestStyle.of(context);
-    return ClipRRect(
-      borderRadius: BorderRadius.circular(26),
-      child: RestArtworkPanel(
-        style: style,
-        child: Container(
-          constraints: const BoxConstraints(minHeight: 170),
-          padding: const EdgeInsets.fromLTRB(18, 12, 18, 20),
-          decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(26),
-            border: Border.all(color: style.outline),
-            gradient: LinearGradient(
-              colors: [
-                style.background.withValues(alpha: 0.82),
-                style.background.withValues(alpha: 0.40),
-              ],
-            ),
-          ),
-          child: StreamBuilder<SleepTimerState>(
-            stream: states,
-            initialData: initialState,
-            builder: (context, snapshot) {
-              final state = snapshot.data ?? initialState;
-              final active =
-                  hasPlaybackSession && state.isActive && !state.isCompleted;
-              final alarm = active ? state.alarmAt : null;
-              final fade = active ? state.untilFade : null;
-              final fading = fade == Duration.zero;
-              final title = active
-                  ? alarm == null
-                        ? context.t(L.sleepTimer)
-                        : state.followsAlarm
-                        ? context.t(L.followingAlarm, [
-                            formatSleepTime(context, alarm),
-                          ])
-                        : context.t(L.stopsAtAlarm, [
-                            formatSleepTime(context, alarm),
-                          ])
-                  : context.t(L.playbackPlan);
-              return Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
+    final content = Container(
+      constraints: BoxConstraints(minHeight: embedded ? 100 : 170),
+      padding: EdgeInsets.fromLTRB(
+        18,
+        embedded ? 4 : 12,
+        18,
+        embedded ? 8 : 20,
+      ),
+      child: StreamBuilder<SleepTimerState>(
+        stream: states,
+        initialData: initialState,
+        builder: (context, snapshot) {
+          final state = snapshot.data ?? initialState;
+          final active =
+              hasPlaybackSession && state.isActive && !state.isCompleted;
+          final alarm = active ? state.alarmAt : null;
+          final fade = active ? state.untilFade : null;
+          final fading = fade == Duration.zero;
+          final title = active
+              ? alarm == null
+                    ? context.t(L.sleepTimer)
+                    : state.followsAlarm
+                    ? context.t(L.followingAlarm, [
+                        formatSleepTime(context, alarm),
+                      ])
+                    : context.t(L.stopsAtAlarm, [
+                        formatSleepTime(context, alarm),
+                      ])
+              : context.t(L.playbackPlan);
+          return Column(
+            crossAxisAlignment: embedded
+                ? CrossAxisAlignment.center
+                : CrossAxisAlignment.start,
+            children: [
+              Row(
                 children: [
-                  Row(
-                    children: [
-                      Expanded(
-                        child: Text(
-                          title,
-                          style: TextStyle(
-                            color: style.text,
-                            fontSize: 14,
-                            fontWeight: FontWeight.w600,
-                          ),
-                        ),
-                      ),
-                      TextButton(
-                        onPressed: onChange,
-                        child: Text(
-                          !active && plan.stopAt == null && !plan.blocked
-                              ? context.t(L.setTimer)
-                              : context.t(L.change),
-                        ),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 6),
-                  if (active) ...[
-                    Row(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        if (fade != null) ...[
-                          Expanded(
-                            child: _CountdownReading(
-                              title: fading
-                                  ? context.t(L.fadingNow)
-                                  : context.t(L.fadeStartsIn),
-                              value: fading
-                                  ? _fadeProgress(context, state)
-                                  : _countdown(fade),
-                              accent: style.secondary,
-                            ),
-                          ),
-                          const SizedBox(width: 12),
-                        ],
-                        Expanded(
-                          child: _CountdownReading(
-                            title: context.t(L.silentIn),
-                            value: _countdown(state.remaining),
-                            accent: style.primary,
-                          ),
-                        ),
-                      ],
-                    ),
-                    if (!isPlaying) ...[
-                      const SizedBox(height: 12),
-                      Text(
-                        state.isRunning
-                            ? context.t(L.pausedWithAlarm)
-                            : context.t(L.timerPaused),
-                        style: TextStyle(color: style.text, fontSize: 12),
-                      ),
-                    ],
-                  ] else
-                    Text(
-                      hasPlaybackSession && !plan.blocked
-                          ? context.t(L.noTimerRunning)
-                          : describeSleepPlan(context, plan),
+                  Expanded(
+                    child: Text(
+                      title,
+                      textAlign: embedded ? TextAlign.center : TextAlign.start,
                       style: TextStyle(
                         color: style.text,
-                        fontSize: 16,
-                        height: 1.45,
+                        fontSize: 14,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                  ),
+                  if (!embedded)
+                    TextButton(
+                      onPressed: onChange,
+                      child: Text(
+                        !active && plan.stopAt == null && !plan.blocked
+                            ? context.t(L.setTimer)
+                            : context.t(L.change),
                       ),
                     ),
                 ],
-              );
-            },
-          ),
-        ),
+              ),
+              const SizedBox(height: 6),
+              if (active) ...[
+                Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    if (fade != null) ...[
+                      Expanded(
+                        child: _CountdownReading(
+                          title: fading
+                              ? context.t(L.fadingNow)
+                              : context.t(L.fadeStartsIn),
+                          value: fading
+                              ? _fadeProgress(context, state)
+                              : _countdown(fade),
+                          accent: style.secondary,
+                          centered: embedded,
+                        ),
+                      ),
+                      const SizedBox(width: 12),
+                    ],
+                    Expanded(
+                      child: _CountdownReading(
+                        title: context.t(L.silentIn),
+                        value: _countdown(state.remaining),
+                        accent: style.primary,
+                        centered: embedded,
+                      ),
+                    ),
+                  ],
+                ),
+                if (!isPlaying) ...[
+                  const SizedBox(height: 12),
+                  Text(
+                    state.isRunning
+                        ? context.t(L.pausedWithAlarm)
+                        : context.t(L.timerPaused),
+                    style: TextStyle(color: style.text, fontSize: 12),
+                  ),
+                ],
+              ] else
+                Text(
+                  hasPlaybackSession && !plan.blocked
+                      ? context.t(L.noTimerRunning)
+                      : describeSleepPlan(context, plan),
+                  textAlign: embedded ? TextAlign.center : TextAlign.start,
+                  style: TextStyle(
+                    color: style.text,
+                    fontSize: 16,
+                    height: 1.45,
+                  ),
+                ),
+            ],
+          );
+        },
       ),
     );
+    return embedded ? content : TonightPanel(radius: 26, child: content);
   }
 
   static String _countdown(Duration duration) {
@@ -172,37 +171,48 @@ class _CountdownReading extends StatelessWidget {
     required this.title,
     required this.value,
     required this.accent,
+    this.centered = false,
   });
 
   final String title;
   final String value;
   final Color accent;
+  final bool centered;
 
   @override
   Widget build(BuildContext context) {
     final style = RestStyle.of(context);
     return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
+      crossAxisAlignment: centered
+          ? CrossAxisAlignment.center
+          : CrossAxisAlignment.start,
       children: [
         // Fit both readings in the same width even on smaller displays.
         SizedBox(
           width: double.infinity,
           child: FittedBox(
             fit: BoxFit.scaleDown,
-            alignment: Alignment.centerLeft,
+            alignment: centered ? Alignment.center : Alignment.centerLeft,
             child: Text(
               value,
               style: TextStyle(
                 color: style.text,
                 fontSize: 31,
-                fontWeight: FontWeight.w600,
+                fontWeight: FontWeight.w400,
                 fontFeatures: const [FontFeature.tabularFigures()],
               ),
             ),
           ),
         ),
         const SizedBox(height: 3),
-        Text(title, style: TextStyle(color: accent, fontSize: 13)),
+        Text(
+          title,
+          textAlign: centered ? TextAlign.center : TextAlign.start,
+          style: TextStyle(
+            color: Color.lerp(accent, style.text, 0.65),
+            fontSize: 13,
+          ),
+        ),
       ],
     );
   }
