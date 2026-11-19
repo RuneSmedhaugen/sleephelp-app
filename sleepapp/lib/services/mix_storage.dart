@@ -6,6 +6,7 @@ import 'package:path_provider/path_provider.dart';
 import '../models/sound_mix.dart';
 
 class MixStorage {
+  Future<void> _writeTail = Future<void>.value();
   Future<File> _storageFile() async {
     final directory = await getApplicationDocumentsDirectory();
     return File('${directory.path}${Platform.pathSeparator}saved_mixes.json');
@@ -28,11 +29,15 @@ class MixStorage {
     }
   }
 
-  Future<void> save(List<SoundMix> mixes) async {
-    final file = await _storageFile();
-    await file.writeAsString(
-      jsonEncode(mixes.map((mix) => mix.toJson()).toList()),
-      flush: true,
-    );
+  Future<void> save(List<SoundMix> mixes) {
+    final contents = jsonEncode(mixes.map((mix) => mix.toJson()).toList());
+    final write = _writeTail.then((_) async {
+      final file = await _storageFile();
+      final pending = File('${file.path}.tmp');
+      await pending.writeAsString(contents, flush: true);
+      await pending.rename(file.path);
+    });
+    _writeTail = write.catchError((Object _) {});
+    return write;
   }
 }

@@ -3,6 +3,8 @@ import 'dart:async';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:sleepapp/services/sleep_audio_handler.dart';
 import 'package:sleepapp/services/sleep_player.dart';
+import 'package:sleepapp/models/sound_mix.dart';
+import 'package:sleepapp/models/wake_playback.dart';
 
 void main() {
   final handlers = <SleepAudioHandler>[];
@@ -168,6 +170,208 @@ void main() {
       throwsA(isA<ArgumentError>()),
     );
   });
+
+  test('loading a mix restores its timer silently and legacy mixes use the default', () async {
+    final player = FakeSleepPlayer();
+    final handler = createHandler(player);
+    await handler.startSleepTimer(
+      duration: const Duration(minutes: 80),
+      fadeOut: const Duration(minutes: 8),
+    );
+    await handler.replaceMix(
+      {'rain.mp3': null},
+      {'rain.mp3': 0.4},
+      onlyWhenIdle: true,
+      timer: const MixTimerSettings(
+        duration: Duration(hours: 4),
+        fade: Duration(minutes: 10),
+      ),
+      restoreTimer: true,
+    );
+    expect(handler.regularTimerDuration, const Duration(hours: 4));
+    expect(handler.previewSleepPlan().playFor!.inSeconds, closeTo(14400, 1));
+    expect(handler.previewSleepPlan().fade, const Duration(minutes: 10));
+    expect(player.playCalls, 0);
+    expect(handler.hasPlaybackSession, isFalse);
+
+    await handler.replaceMix(
+      {'rain.mp3': null},
+      {'rain.mp3': 0.7},
+      onlyWhenIdle: true,
+      restoreTimer: true,
+    );
+    expect(handler.regularTimerDuration, const Duration(minutes: 80));
+    expect(handler.previewSleepPlan().fade, const Duration(minutes: 8));
+    expect(player.playCalls, 0);
+  });
+
+  test(
+    'a mix can remember no timer and restore the regular default afterwards',
+    () async {
+      final handler = createHandler(FakeSleepPlayer());
+      await handler.startSleepTimer(
+        duration: const Duration(hours: 1),
+        fadeOut: const Duration(minutes: 5),
+      );
+      await handler.replaceMix(
+        {'rain.mp3': null},
+        {},
+        onlyWhenIdle: true,
+        timer: const MixTimerSettings(),
+      );
+      expect(handler.regularTimerDuration, isNull);
+      expect(handler.previewSleepPlan().stopAt, isNull);
+      expect(handler.previewSleepPlan().fade, Duration.zero);
+      await handler.replaceMix(
+        {'rain.mp3': null},
+        {},
+        onlyWhenIdle: true,
+        restoreTimer: true,
+      );
+      expect(handler.regularTimerDuration, const Duration(hours: 1));
+      expect(handler.regularTimerFade, const Duration(minutes: 5));
+    },
+  );
+
+  test(
+    'nearby custom alarms win until the user explicitly chooses the mix timer',
+    () async {
+      final handler = createHandler(FakeSleepPlayer());
+      final wake = WakePlayback(
+        DateTime.now().add(const Duration(hours: 2)),
+        finishBefore: const Duration(hours: 1),
+        fade: const Duration(minutes: 10),
+      );
+      await handler.updateWakeAlarm(wake, ringing: false, didRing: false);
+      await handler.replaceMix(
+        {'rain.mp3': null},
+        {},
+        onlyWhenIdle: true,
+        timer: const MixTimerSettings(
+          duration: Duration(hours: 4),
+          fade: Duration(minutes: 20),
+        ),
+      );
+      final plan = handler.previewSleepPlan();
+      expect(plan.followsAlarm, isTrue);
+      expect(plan.stopAt, wake.customStop);
+      expect(plan.fade, const Duration(minutes: 10));
+      await handler.startSleepTimer(
+        duration: handler.regularTimerDuration!,
+        fadeOut: handler.regularTimerFade,
+      );
+      final override = handler.previewSleepPlan();
+      expect(override.followsAlarm, isFalse);
+      expect(override.timerShortened, isTrue);
+      expect(override.stopAt, wake.ringsAt);
+      expect(override.fade, const Duration(minutes: 20));
+    },
+  );
+
+  test('an alarm two days away uses the saved mix timer and fade', () async {
+    final handler = createHandler(FakeSleepPlayer());
+    await handler.updateWakeAlarm(
+      WakePlayback(
+        DateTime.now().add(const Duration(days: 2)),
+        finishBefore: const Duration(hours: 1),
+        fade: const Duration(minutes: 10),
+      ),
+      ringing: false,
+      didRing: false,
+    );
+    await handler.replaceMix(
+      {'rain.mp3': null},
+      {},
+      onlyWhenIdle: true,
+      timer: const MixTimerSettings(
+        duration: Duration(hours: 4),
+        fade: Duration(minutes: 20),
+      ),
+    );
+    final plan = handler.previewSleepPlan();
+    expect(plan.followsAlarm, isFalse);
+    expect(plan.cappedAtAlarm, isFalse);
+    expect(plan.playFor!.inSeconds, closeTo(14400, 1));
+    expect(plan.fade, const Duration(minutes: 20));
+  });
+
+  test(
+    'alarms cap a saved timer and ringing ends its playback session',
+    () async {
+      final player = FakeSleepPlayer();
+      final handler = createHandler(player);
+      final wake = WakePlayback(DateTime.now().add(const Duration(hours: 2)));
+      await handler.updateWakeAlarm(wake, ringing: false, didRing: false);
+      await handler.replaceMix(
+        {'rain.mp3': null},
+        {},
+        onlyWhenIdle: true,
+        timer: const MixTimerSettings(
+          duration: Duration(hours: 4),
+          fade: Duration(minutes: 10),
+        ),
+      );
+      expect(handler.previewSleepPlan().stopAt, wake.ringsAt);
+      expect(handler.previewSleepPlan().timerShortened, isTrue);
+      await handler.play();
+      await handler.updateWakeAlarm(wake, ringing: true, didRing: true);
+      expect(handler.hasPlaybackSession, isFalse);
+      expect(player.isPlaying, isFalse);
+      await handler.play();
+      expect(player.isPlaying, isFalse);
+    },
+  );
+
+  test(
+    'automatic mix loading leaves paused sessions and their timer intact',
+    () async {
+      final handler = createHandler(FakeSleepPlayer());
+      await handler.replaceMix(
+        {'rain.mp3': null},
+        {},
+        onlyWhenIdle: true,
+        timer: const MixTimerSettings(
+          duration: Duration(hours: 4),
+          fade: Duration(minutes: 10),
+        ),
+      );
+      await handler.play();
+      await handler.pause();
+      final replaced = await handler.replaceMix(
+        {'ocean.mp3': null},
+        {},
+        onlyWhenIdle: true,
+        timer: const MixTimerSettings(duration: Duration(hours: 8)),
+      );
+      expect(replaced, isFalse);
+      expect(handler.selectedSounds, {'rain.mp3'});
+      expect(handler.regularTimerDuration, const Duration(hours: 4));
+      expect(handler.hasPlaybackSession, isTrue);
+      expect(handler.isPlaying, isFalse);
+    },
+  );
+
+  test(
+    'invalid saved timer settings are rejected before changing the mix',
+    () async {
+      final handler = createHandler(FakeSleepPlayer());
+      await handler.addSound('rain.mp3');
+      await expectLater(
+        handler.replaceMix(
+          {'ocean.mp3': null},
+          {},
+          onlyWhenIdle: true,
+          timer: const MixTimerSettings(
+            duration: Duration(minutes: 1),
+            fade: Duration(minutes: 2),
+          ),
+        ),
+        throwsA(isA<ArgumentError>()),
+      );
+      expect(handler.selectedSounds, {'rain.mp3'});
+      expect(handler.regularTimerDuration, isNull);
+    },
+  );
 }
 
 class FakeSleepPlayer implements SleepPlayer {

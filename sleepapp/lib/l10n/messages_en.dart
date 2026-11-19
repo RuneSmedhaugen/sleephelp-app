@@ -1,6 +1,32 @@
 part of 'rest_strings.dart';
 
 const _en = <L, String>{
+  L.yourSoundMix: 'Your sound mix',
+  L.chooseSounds: 'Choose sounds',
+  L.liveMixHint: 'Sound and volume changes apply immediately. Save to keep this mix in your library.',
+  L.loadMix: 'Load',
+  L.saveMixTimerHint: 'Save the current sleep timer and fade with this mix.',
+  L.rememberMixTimer: 'Remember timer and fade',
+  L.mixTimerHint:
+      'Use these settings when this mix is loaded. Alarm rules still apply.',
+  L.noSleepTimer: 'No sleep timer',
+  L.loadNamed: 'Load {0}',
+  L.mixLoaded: '“{0}” loaded · ready to play',
+  L.mixEditHint:
+      'Save your changes to use them the next time you select this mix.',
+  L.editMix: 'Edit mix',
+  L.renameMix: 'Rename',
+  L.duplicateMix: 'Duplicate',
+  L.mixActions: 'Actions for {0}',
+  L.updateMix: 'Update mix',
+  L.saveAsNewMix: 'Save as new mix',
+  L.mixName: 'Mix name',
+  L.copyName: '{0} (copy)',
+  L.mixUpdated: '“{0}” updated',
+  L.unsavedChanges: 'Unsaved changes',
+  L.addSounds: 'Add sounds',
+  L.done: 'Done',
+  L.unavailableSound: 'Unavailable sound',
   L.playbackTitle: 'Sleep sounds',
   L.settings: 'Settings',
   L.theme: 'Theme',

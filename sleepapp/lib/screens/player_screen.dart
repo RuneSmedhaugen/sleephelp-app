@@ -1,5 +1,7 @@
 import 'dart:async';
 
+import 'package:flutter/foundation.dart';
+
 import 'package:audio_service/audio_service.dart';
 import 'package:material_ui/material_ui.dart';
 
@@ -14,6 +16,8 @@ import '../services/mix_storage.dart';
 import '../services/sleep_audio_handler.dart';
 import '../services/wake_alarms.dart';
 import '../widgets/sleep_timer_sheet.dart';
+import '../widgets/mix_name_dialog.dart';
+import '../widgets/mix_editor_sheet.dart';
 import '../widgets/mix_rotation_sheet.dart';
 import 'library_view.dart';
 import 'alarms_view.dart';
@@ -46,6 +50,7 @@ class _PlayerScreenState extends State<PlayerScreen> {
   final MixRotationStorage _rotationStorage = MixRotationStorage();
   final ImportedSoundStorage _importedSounds = ImportedSoundStorage();
   final WakeAlarms _wakeAlarms = WakeAlarms();
+  Future<void> _mixWriteTail = Future<void>.value();
   final Set<String> _busySounds = {};
   late List<Sound> _sounds;
   late List<SoundMix> _savedMixes;
@@ -54,6 +59,7 @@ class _PlayerScreenState extends State<PlayerScreen> {
   late final AppLifecycleListener _lifecycle;
   Timer? _dayChange;
   String? _loadedMixId;
+  DateTime? _loadedMixUpdatedAt;
   bool _followRotation = true;
   bool _switchingMix = false;
   bool _refreshRequested = false;
@@ -64,6 +70,17 @@ class _PlayerScreenState extends State<PlayerScreen> {
   bool _isPlaying = false;
 
   SleepAudioHandler get _audio => widget.audio;
+
+  bool get _currentMixChanged {
+    final saved = _savedMix(_loadedMixId);
+    final selected = _audio.selectedSounds;
+    if (saved == null) return selected.isNotEmpty;
+    return !setEquals(selected, saved.sounds.toSet()) ||
+        selected.any(
+          (file) =>
+              (_audio.soundVolumes[file] ?? 1) != (saved.volumes[file] ?? 1),
+        );
+  }
 
   @override
   void didChangeDependencies() {
@@ -157,7 +174,9 @@ class _PlayerScreenState extends State<PlayerScreen> {
 
   void _rememberPlayedMix() {
     final id = _loadedMixId;
-    if (id == _lastPlayedId || _savedMix(id) == null) return;
+    if (_savedMix(id) == null || _currentMixChanged) return;
+    _followRotation = true;
+    if (id == _lastPlayedId) return;
     _lastPlayedId = id;
     unawaited(_saveRotationPreferences());
   }
@@ -219,7 +238,11 @@ class _PlayerScreenState extends State<PlayerScreen> {
       for (final id in ids) {
         final mix = _savedMix(id);
         if (mix == null) continue;
-        if (mix.id == _loadedMixId && _audio.selectedSounds.isNotEmpty) return;
+        if (mix.id == _loadedMixId &&
+            mix.updatedAt == _loadedMixUpdatedAt &&
+            _audio.selectedSounds.isNotEmpty) {
+          return;
+        }
         try {
           if (await _loadMix(mix, onlyWhenIdle: true)) return;
         } catch (error) {
@@ -227,7 +250,12 @@ class _PlayerScreenState extends State<PlayerScreen> {
         }
       }
       if (_loadedMixId != null &&
-          await _audio.replaceMix({}, {}, onlyWhenIdle: true)) {
+          await _audio.replaceMix(
+            {},
+            {},
+            onlyWhenIdle: true,
+            restoreTimer: true,
+          )) {
         _loadedMixId = null;
       }
     } catch (error) {
@@ -294,7 +322,6 @@ class _PlayerScreenState extends State<PlayerScreen> {
   Future<void> _toggleSound(Sound sound) async {
     if (_switchingMix || _busySounds.contains(sound.file)) return;
     _followRotation = false;
-    _loadedMixId = null;
     setState(() => _busySounds.add(sound.file));
     try {
       if (_audio.selectedSounds.contains(sound.file)) {
@@ -314,7 +341,6 @@ class _PlayerScreenState extends State<PlayerScreen> {
   Future<void> _setSoundVolume(String file, double value) async {
     if (_switchingMix) return;
     _followRotation = false;
-    _loadedMixId = null;
     try {
       await _audio.setSoundVolume(file, value);
       if (mounted) setState(() {});
@@ -361,65 +387,172 @@ class _PlayerScreenState extends State<PlayerScreen> {
     }
   }
 
-  Future<void> _saveCurrentMix() async {
-    final selected = _audio.selectedSounds.toList();
-    if (selected.isEmpty) {
-      _showLocalized(L.addBeforeSave);
-      return;
+  Future<String?> _askForMixName({
+    String? initialName,
+    L title = L.nameMix,
+    L confirmLabel = L.saveMix,
+  }) => showDialog<String>(
+    context: context,
+    builder: (dialogContext) => MixNameDialog(
+      initialName: initialName ?? dialogContext.t(L.nightMix),
+      title: title,
+      confirmLabel: confirmLabel,
+    ),
+  );
+
+  Future<void> _changeSavedMixes(
+    List<SoundMix> Function(List<SoundMix>) change,
+  ) {
+    final write = _mixWriteTail.then((_) async {
+      final next = change(_savedMixes);
+      await _mixStorage.save(next);
+      if (mounted) setState(() => _savedMixes = next);
+    });
+    _mixWriteTail = write.catchError((Object _) {});
+    return write;
+  }
+
+  Future<void> _storeMix(SoundMix mix) => _changeSavedMixes((current) {
+    final index = current.indexWhere((item) => item.id == mix.id);
+    final next = [...current];
+    if (index < 0) {
+      next.insert(0, mix);
+    } else {
+      next[index] = mix;
     }
+    return next;
+  });
 
-    final name = await _askForMixName();
-    if (name == null || name.trim().isEmpty) return;
-
-    final mix = SoundMix(
-      id: DateTime.now().microsecondsSinceEpoch.toString(),
-      name: name.trim(),
-      sounds: selected,
-      volumes: {
-        for (final file in selected) file: _audio.soundVolumes[file] ?? 1,
-      },
-      updatedAt: DateTime.now(),
+  Future<void> _renameSavedMix(SoundMix mix) async {
+    final name = await _askForMixName(
+      initialName: mix.name,
+      title: L.renameMix,
+      confirmLabel: L.save,
     );
-    final nextMixes = [mix, ..._savedMixes];
+    if (!mounted || name == null || name.trim().isEmpty) return;
     try {
-      await _mixStorage.save(nextMixes);
-      if (!mounted) return;
-      setState(() => _savedMixes = nextMixes);
-      _showLocalized(L.mixSaved, [mix.name]);
+      final current = _savedMix(mix.id);
+      if (current == null) return;
+      final renamed = current.copyWith(
+        name: name.trim(),
+        updatedAt: DateTime.now(),
+      );
+      await _storeMix(renamed);
+      _showLocalized(L.mixUpdated, [renamed.name]);
     } catch (error) {
-      debugPrint('Could not save mix: $error');
+      debugPrint('Could not rename mix: $error');
       _showLocalized(L.mixSaveError);
     }
   }
 
-  Future<String?> _askForMixName() async {
-    final controller = TextEditingController(text: context.t(L.nightMix));
-    final name = await showDialog<String>(
+  Future<void> _duplicateSavedMix(SoundMix mix) async {
+    final suffixLength = context.t(L.copyName, ['']).characters.length;
+    final baseName = mix.name.characters.take(32 - suffixLength).toString();
+    final name = await _askForMixName(
+      initialName: context.t(L.copyName, [baseName]),
+      title: L.duplicateMix,
+      confirmLabel: L.saveAsNewMix,
+    );
+    if (!mounted || name == null || name.trim().isEmpty) return;
+    try {
+      final copy = mix.copyWith(
+        id: DateTime.now().microsecondsSinceEpoch.toString(),
+        name: name.trim(),
+        updatedAt: DateTime.now(),
+      );
+      await _storeMix(copy);
+      _showLocalized(L.mixSaved, [copy.name]);
+    } catch (error) {
+      debugPrint('Could not duplicate mix: $error');
+      _showLocalized(L.mixSaveError);
+    }
+  }
+
+  Future<void> _editSavedMix(SoundMix mix) => showModalBottomSheet<void>(
+    context: context,
+    isScrollControlled: true,
+    useSafeArea: true,
+    builder: (_) => MixEditorSheet(
+      mix: mix,
+      sounds: _sounds,
+      suggestedTimer: MixTimerSettings(
+        duration: _audio.regularTimerDuration,
+        fade: _audio.regularTimerFade,
+      ),
+      onSave: (draft, saveAsNew) async {
+        final saved = saveAsNew
+            ? draft.copyWith(
+                id: DateTime.now().microsecondsSinceEpoch.toString(),
+              )
+            : draft;
+        try {
+          await _storeMix(saved);
+          _showLocalized(saveAsNew ? L.mixSaved : L.mixUpdated, [saved.name]);
+          return true;
+        } catch (error) {
+          debugPrint('Could not save edited mix: $error');
+          return false;
+        }
+      },
+    ),
+  );
+
+  Future<void> _openMixer() async {
+    _followRotation = false;
+    final original = _savedMix(_loadedMixId);
+    final timer = MixTimerSettings(
+      duration: _audio.regularTimerDuration,
+      fade: _audio.regularTimerFade,
+    );
+    final current = SoundMix(
+      id: original?.id ?? DateTime.now().microsecondsSinceEpoch.toString(),
+      name: original?.name ?? context.t(L.yourSoundMix),
+      sounds: _audio.selectedSounds.toList(),
+      volumes: _audio.soundVolumes,
+      updatedAt: DateTime.now(),
+      timer: original?.timer,
+    );
+    await showModalBottomSheet<void>(
       context: context,
-      builder: (dialogContext) => AlertDialog(
-        title: Text(context.t(L.nameMix)),
-        content: TextField(
-          controller: controller,
-          autofocus: true,
-          maxLength: 32,
-          textCapitalization: TextCapitalization.sentences,
-          decoration: InputDecoration(hintText: context.t(L.nameHint)),
-          onSubmitted: (value) => Navigator.pop(dialogContext, value),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(dialogContext),
-            child: Text(context.t(L.cancel)),
-          ),
-          FilledButton(
-            onPressed: () => Navigator.pop(dialogContext, controller.text),
-            child: Text(context.t(L.saveMix)),
-          ),
-        ],
+      isScrollControlled: true,
+      useSafeArea: true,
+      builder: (_) => MixEditorSheet(
+        mix: current,
+        originalMix: original,
+        isSavedMix: original != null,
+        sounds: _sounds,
+        suggestedTimer: timer,
+        onSoundToggle: (sound) async {
+          await _toggleSound(sound);
+          return _audio.selectedSounds.contains(sound.file);
+        },
+        onVolumeChanged: (file, value) async {
+          await _setSoundVolume(file, value);
+          return _audio.soundVolumes[file] ?? 1;
+        },
+        onSave: (draft, saveAsNew) async {
+          final saved = saveAsNew || original == null
+              ? draft.copyWith(
+                  id: DateTime.now().microsecondsSinceEpoch.toString(),
+                )
+              : draft;
+          try {
+            await _storeMix(saved);
+            if (!mounted) return true;
+            setState(() {
+              _loadedMixId = saved.id;
+              _loadedMixUpdatedAt = saved.updatedAt;
+            });
+            if (_audio.isPlaying) _rememberPlayedMix();
+            _showLocalized(L.mixSaved, [saved.name]);
+            return true;
+          } catch (error) {
+            debugPrint('Could not save current mixer: $error');
+            return false;
+          }
+        },
       ),
     );
-    controller.dispose();
-    return name;
   }
 
   Future<bool> _loadMix(SoundMix mix, {required bool onlyWhenIdle}) async {
@@ -434,25 +567,30 @@ class _PlayerScreenState extends State<PlayerScreen> {
       sources,
       mix.volumes,
       onlyWhenIdle: onlyWhenIdle,
+      timer: mix.timer,
+      restoreTimer: true,
     );
-    if (loaded) _loadedMixId = mix.id;
+    if (loaded) {
+      _loadedMixId = mix.id;
+      _loadedMixUpdatedAt = mix.updatedAt;
+    }
     return loaded;
   }
 
-  Future<void> _playSavedMix(SoundMix mix) async {
+  Future<void> _loadSavedMix(SoundMix mix) async {
     if (_switchingMix || _busySounds.isNotEmpty) return;
     _switchingMix = true;
+    _followRotation = false;
     try {
       await _wakeAlarms.refresh();
-      if (!mounted || !_canStartPlayback()) return;
-      if (!await _loadMix(mix, onlyWhenIdle: false)) {
+      if (!mounted) return;
+      await _audio.stop();
+      if (!await _loadMix(mix, onlyWhenIdle: true)) {
         _showLocalized(L.mixNoSounds);
         return;
       }
-      _followRotation = true;
-      await _audio.play();
-      _rememberPlayedMix();
-      _showLocalized(L.playingMix, [mix.name]);
+      if (mounted) setState(() => _activeTab = 0);
+      _showLocalized(L.mixLoaded, [mix.name]);
     } catch (error) {
       debugPrint('Could not load saved mix: $error');
       _showLocalized(L.mixLoadError);
@@ -481,11 +619,11 @@ class _PlayerScreenState extends State<PlayerScreen> {
     );
     if (shouldDelete != true || !mounted) return;
 
-    final nextMixes = _savedMixes.where((item) => item.id != mix.id).toList();
     try {
-      await _mixStorage.save(nextMixes);
+      await _changeSavedMixes(
+        (current) => current.where((item) => item.id != mix.id).toList(),
+      );
       if (!mounted) return;
-      setState(() => _savedMixes = nextMixes);
       await _refreshDefaultMix();
     } catch (error) {
       debugPrint('Could not delete saved mix: $error');
@@ -559,28 +697,20 @@ class _PlayerScreenState extends State<PlayerScreen> {
     final selected = _audio.selectedSounds;
     final pages = [
       SleepHomeView(
-        sounds: _sounds,
-        selectedSounds: selected,
-        volumes: _audio.soundVolumes,
+        selectedSoundCount: selected.length,
         masterVolume: _audio.masterVolume,
         isPlaying: _isPlaying,
         hasPlaybackSession: _audio.hasPlaybackSession,
         mixName: _savedMix(_loadedMixId)?.name,
+        hasUnsavedChanges: _currentMixChanged,
         timerState: _audio.sleepTimerState,
         timerStates: _audio.sleepTimerStates,
         plannedTimer: _audio.previewSleepPlan(),
         onPlayPause: _togglePlayback,
         onStop: _stopPlayback,
         onTimer: _showTimer,
-        onSaveMix: _saveCurrentMix,
-        onBrowse: () => setState(() => _activeTab = 1),
-        onVolumeChanged: _setSoundVolume,
+        onOpenMixer: _openMixer,
         onMasterVolumeChanged: _setMasterVolume,
-        onRemoveSound: (file) {
-          final sound = _soundForFile(file);
-          if (sound != null) unawaited(_toggleSound(sound));
-        },
-        onAddSound: (sound) => unawaited(_toggleSound(sound)),
       ),
       LibraryView(
         sounds: _sounds,
@@ -591,8 +721,11 @@ class _PlayerScreenState extends State<PlayerScreen> {
       SavedMixesView(
         mixes: _savedMixes,
         sounds: _sounds,
-        onPlay: (mix) => unawaited(_playSavedMix(mix)),
+        onLoad: (mix) => unawaited(_loadSavedMix(mix)),
         onDelete: (mix) => unawaited(_deleteSavedMix(mix)),
+        onEdit: (mix) => unawaited(_editSavedMix(mix)),
+        onRename: (mix) => unawaited(_renameSavedMix(mix)),
+        onDuplicate: (mix) => unawaited(_duplicateSavedMix(mix)),
         onBrowse: () => setState(() => _activeTab = 1),
         rotationSummary: _rotationSummary,
         onRotation: _editRotation,
@@ -652,12 +785,5 @@ class _PlayerScreenState extends State<PlayerScreen> {
         ],
       ),
     );
-  }
-
-  Sound? _soundForFile(String file) {
-    for (final sound in _sounds) {
-      if (sound.file == file) return sound;
-    }
-    return null;
   }
 }

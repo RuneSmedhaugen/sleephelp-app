@@ -5,6 +5,7 @@ import 'package:audio_session/audio_session.dart';
 import 'package:flutter/foundation.dart';
 
 import '../models/wake_playback.dart';
+import '../models/sound_mix.dart';
 import 'sleep_player.dart';
 
 /// The single source of truth for the active sound mix and its playback.
@@ -64,6 +65,7 @@ class SleepAudioHandler extends BaseAudioHandler {
   Duration _fadeDuration = Duration.zero;
   Duration? _regularDuration;
   Duration _regularFade = Duration.zero;
+  MixTimerSettings? _mixTimer;
   WakePlayback? _nextWake;
   bool _wakeRinging = false;
   bool _useRegularTimerTonight = false;
@@ -85,8 +87,9 @@ class SleepAudioHandler extends BaseAudioHandler {
   Stream<SleepTimerState> get sleepTimerStates => _timerStates.stream;
   SleepTimerState get sleepTimerState => _currentTimerState();
   Future<void> Function()? refreshAlarmSchedule;
-  Duration? get regularTimerDuration => _regularDuration;
-  Duration get regularTimerFade => _regularFade;
+  Duration? get regularTimerDuration =>
+      _mixTimer == null ? _regularDuration : _mixTimer!.duration;
+  Duration get regularTimerFade => _mixTimer?.fade ?? _regularFade;
   bool get usesRegularTimerTonight => _useRegularTimerTonight;
   bool get offersAlarmPlan =>
       _nextWake?.offersCustomPlan(DateTime.now()) ?? false;
@@ -98,7 +101,7 @@ class SleepAudioHandler extends BaseAudioHandler {
   }) {
     final now = DateTime.now();
     final wake = _nextWake;
-    final total = duration ?? _regularDuration;
+    final total = duration ?? regularTimerDuration;
     final regularStop = total == null ? null : now.add(total);
     final follows =
         wake != null &&
@@ -112,7 +115,7 @@ class SleepAudioHandler extends BaseAudioHandler {
     final stop = follows ? wake.customStop : (capped ? alarmAt : regularStop);
     final requestedFade = follows
         ? wake.fade ?? Duration.zero
-        : fade ?? _regularFade;
+        : fade ?? regularTimerFade;
     final effectiveFade = _availableFade(requestedFade, stop?.difference(now));
     return SleepPlan(
       stopAt: stop,
@@ -211,8 +214,17 @@ class SleepAudioHandler extends BaseAudioHandler {
     Map<String, String?> sources,
     Map<String, double> volumes, {
     required bool onlyWhenIdle,
+    MixTimerSettings? timer,
+    bool restoreTimer = false,
   }) => _enqueueTransport(() async {
     if (_disposed || (onlyWhenIdle && _hasPlaybackSession)) return false;
+    if (timer != null && !timer.isValid) {
+      throw ArgumentError.value(
+        timer,
+        'timer',
+        'Invalid timer or fade duration.',
+      );
+    }
     final previous = selectedSounds;
     final target = sources.keys.toSet();
     try {
@@ -233,6 +245,12 @@ class SleepAudioHandler extends BaseAudioHandler {
     }
     for (final file in target) {
       await setSoundVolume(file, volumes[file] ?? 1);
+    }
+    if (restoreTimer || timer != null) {
+      _mixTimer = timer;
+      _useRegularTimerTonight = false;
+      await _applySleepPlan();
+      _publishTimerState();
     }
     return true;
   });
@@ -314,6 +332,7 @@ class SleepAudioHandler extends BaseAudioHandler {
       );
     }
 
+    _mixTimer = null;
     _regularDuration = duration;
     _regularFade = fadeOut;
     _useRegularTimerTonight = offersAlarmPlan;
@@ -325,6 +344,7 @@ class SleepAudioHandler extends BaseAudioHandler {
       _enqueueTransport(_cancelSleepTimerAndApplyVolume);
 
   Future<void> _cancelSleepTimerAndApplyVolume() async {
+    _mixTimer = null;
     _regularDuration = null;
     _regularFade = Duration.zero;
     _useRegularTimerTonight = offersAlarmPlan;
@@ -605,14 +625,14 @@ class SleepAudioHandler extends BaseAudioHandler {
       return false;
     }
     _cancelSleepTimer(resetFade: false);
-    _timerDuration = plan.followsAlarm ? null : _regularDuration;
-    _fadeDuration = plan.followsAlarm ? Duration.zero : _regularFade;
+    _timerDuration = plan.followsAlarm ? null : regularTimerDuration;
+    _fadeDuration = plan.followsAlarm ? Duration.zero : regularTimerFade;
     final wallStop = plan.followsAlarm ? plan.stopAt : plan.alarmAt;
     final alarmAt = plan.alarmAt;
     if (wallStop != null && alarmAt != null) {
       _setWallStop(
         wallStop,
-        plan.followsAlarm ? plan.fade : _regularFade,
+        plan.followsAlarm ? plan.fade : regularTimerFade,
         alarmAt: alarmAt,
         followsAlarm: plan.followsAlarm,
       );

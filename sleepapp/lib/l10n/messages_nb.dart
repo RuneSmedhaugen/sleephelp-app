@@ -1,6 +1,32 @@
 part of 'rest_strings.dart';
 
 const _nb = <L, String>{
+  L.yourSoundMix: 'Lydmiksen din',
+  L.chooseSounds: 'Velg lyder',
+  L.liveMixHint: 'Endringer i lyder og volum gjelder med en gang. Lagre for å beholde miksen i biblioteket.',
+  L.loadMix: 'Last inn',
+  L.saveMixTimerHint:
+      'Lagre gjeldende innsovningstimer og nedtoning sammen med miksen.',
+  L.rememberMixTimer: 'Husk timer og nedtoning',
+  L.mixTimerHint: 'Bruk disse innstillingene når miksen lastes inn. Alarmreglene gjelder fortsatt.',
+  L.noSleepTimer: 'Ingen innsovningstimer',
+  L.loadNamed: 'Last inn {0}',
+  L.mixLoaded: '«{0}» er lastet inn · klar til avspilling',
+  L.mixEditHint:
+      'Lagre endringene for å bruke dem neste gang du velger denne miksen.',
+  L.editMix: 'Rediger miks',
+  L.renameMix: 'Gi nytt navn',
+  L.duplicateMix: 'Lag en kopi',
+  L.mixActions: 'Handlinger for {0}',
+  L.updateMix: 'Oppdater miks',
+  L.saveAsNewMix: 'Lagre som ny miks',
+  L.mixName: 'Navn på miksen',
+  L.copyName: '{0} (kopi)',
+  L.mixUpdated: '«{0}» er oppdatert',
+  L.unsavedChanges: 'Ulagrede endringer',
+  L.addSounds: 'Legg til lyder',
+  L.done: 'Ferdig',
+  L.unavailableSound: 'Utilgjengelig lyd',
   L.playbackTitle: 'Søvnlyder',
   L.settings: 'Innstillinger',
   L.theme: 'Tema',

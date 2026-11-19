@@ -1,70 +1,53 @@
 import 'package:material_ui/material_ui.dart';
 
 import '../l10n/rest_strings.dart';
-import '../l10n/sound_strings.dart';
 import '../models/rest_style.dart';
-import '../models/sound.dart';
 import '../models/wake_playback.dart';
 import '../services/sleep_audio_handler.dart';
-import '../widgets/sound_icon.dart';
-import '../widgets/sound_layer_card.dart';
 import '../widgets/tonight_timer_card.dart';
 
 class SleepHomeView extends StatelessWidget {
   const SleepHomeView({
     super.key,
-    required this.sounds,
-    required this.selectedSounds,
-    required this.volumes,
+    required this.selectedSoundCount,
     required this.masterVolume,
     required this.isPlaying,
     required this.hasPlaybackSession,
     required this.mixName,
+    required this.hasUnsavedChanges,
     required this.timerState,
     required this.timerStates,
     required this.plannedTimer,
     required this.onPlayPause,
     required this.onStop,
     required this.onTimer,
-    required this.onSaveMix,
-    required this.onBrowse,
-    required this.onVolumeChanged,
+    required this.onOpenMixer,
     required this.onMasterVolumeChanged,
-    required this.onRemoveSound,
-    required this.onAddSound,
   });
 
-  final List<Sound> sounds;
-  final Set<String> selectedSounds;
-  final Map<String, double> volumes;
+  final int selectedSoundCount;
   final double masterVolume;
   final bool isPlaying;
   final bool hasPlaybackSession;
   final String? mixName;
+  final bool hasUnsavedChanges;
   final SleepTimerState timerState;
   final Stream<SleepTimerState> timerStates;
   final SleepPlan plannedTimer;
   final VoidCallback onPlayPause;
   final VoidCallback onStop;
   final VoidCallback onTimer;
-  final VoidCallback onSaveMix;
-  final VoidCallback onBrowse;
-  final void Function(String file, double volume) onVolumeChanged;
+  final VoidCallback onOpenMixer;
   final ValueChanged<double> onMasterVolumeChanged;
-  final ValueChanged<String> onRemoveSound;
-  final ValueChanged<Sound> onAddSound;
 
   @override
   Widget build(BuildContext context) {
     final style = RestStyle.of(context);
-    final selected = sounds
-        .where((sound) => selectedSounds.contains(sound.file))
-        .toList();
-    final suggestions = sounds
-        .where((sound) => !selectedSounds.contains(sound.file))
-        .take(3)
-        .toList();
-
+    final title = selectedSoundCount == 0
+        ? context.t(L.chooseSounds)
+        : mixName ?? context.t(L.yourSoundMix);
+    final count = RestStrings.of(context)
+        .count(selectedSoundCount, L.layerCountOne, L.layerCountOther);
     return CustomScrollView(
       physics: const BouncingScrollPhysics(),
       slivers: [
@@ -82,73 +65,49 @@ class SleepHomeView extends StatelessWidget {
                 isPlaying: isPlaying,
                 onChange: onTimer,
               ),
-              const SizedBox(height: 30),
-              Row(
-                children: [
-                  Expanded(child: _SectionTitle(context.t(L.soundscape))),
-                  TextButton.icon(
-                    onPressed: selected.isEmpty ? null : onSaveMix,
-                    icon: const Icon(Icons.bookmark_add_outlined, size: 18),
-                    label: Text(context.t(L.save)),
+              const SizedBox(height: 24),
+              Material(
+                color: style.panel,
+                borderRadius: BorderRadius.circular(21),
+                child: ListTile(
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(21),
                   ),
-                ],
+                  contentPadding: const EdgeInsets.symmetric(
+                    horizontal: 17,
+                    vertical: 8,
+                  ),
+                  leading: Icon(Icons.graphic_eq_rounded, color: style.primary),
+                  title: Text(
+                    title,
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                  subtitle: Text(
+                    hasUnsavedChanges
+                        ? '$count · ${context.t(L.unsavedChanges)}'
+                        : count,
+                  ),
+                  trailing: const Icon(Icons.chevron_right_rounded),
+                  onTap: onOpenMixer,
+                ),
               ),
-              const SizedBox(height: 10),
-              if (selected.isEmpty)
-                _EmptyMixCard(onBrowse: onBrowse)
-              else ...[
+              if (selectedSoundCount > 0) ...[
+                const SizedBox(height: 12),
                 _PlaybackCard(
                   isPlaying: isPlaying,
                   canStop: hasPlaybackSession,
-                  mixName: mixName,
-                  count: selected.length,
+                  mixName: null,
+                  count: selectedSoundCount,
                   onPlayPause: onPlayPause,
                   onStop: onStop,
                 ),
-                const SizedBox(height: 12),
-                _MasterVolumeCard(
-                  value: masterVolume,
-                  onChanged: onMasterVolumeChanged,
-                ),
-                const SizedBox(height: 12),
-                for (final sound in selected)
-                  SoundLayerCard(
-                    sound: sound,
-                    volume: volumes[sound.file] ?? 1,
-                    onVolumeChanged: (value) =>
-                        onVolumeChanged(sound.file, value),
-                    onRemove: () => onRemoveSound(sound.file),
-                  ),
               ],
-              const SizedBox(height: 26),
-              Row(
-                children: [
-                  Expanded(child: _SectionTitle(context.t(L.addLayer))),
-                  TextButton(
-                    onPressed: onBrowse,
-                    child: Text(context.t(L.seeAll)),
-                  ),
-                ],
+              const SizedBox(height: 12),
+              _MasterVolumeCard(
+                value: masterVolume,
+                onChanged: onMasterVolumeChanged,
               ),
-              const SizedBox(height: 4),
-              if (suggestions.isEmpty)
-                Text(
-                  context.t(L.allSoundsAdded),
-                  style: TextStyle(color: style.quaternary),
-                )
-              else
-                SizedBox(
-                  height: 128,
-                  child: ListView.separated(
-                    scrollDirection: Axis.horizontal,
-                    itemCount: suggestions.length,
-                    separatorBuilder: (_, _) => const SizedBox(width: 10),
-                    itemBuilder: (context, index) => _SuggestionCard(
-                      sound: suggestions[index],
-                      onAdd: () => onAddSound(suggestions[index]),
-                    ),
-                  ),
-                ),
             ],
           ),
         ),
@@ -201,25 +160,6 @@ class _TopGreeting extends StatelessWidget {
           ),
         ),
       ],
-    );
-  }
-}
-
-class _SectionTitle extends StatelessWidget {
-  const _SectionTitle(this.title);
-  final String title;
-
-  @override
-  Widget build(BuildContext context) {
-    final style = RestStyle.of(context);
-    return Text(
-      title,
-      style: TextStyle(
-        color: style.text,
-        fontSize: 17,
-        fontWeight: FontWeight.w600,
-        letterSpacing: -0.2,
-      ),
     );
   }
 }
@@ -355,125 +295,6 @@ class _MasterVolumeCard extends StatelessWidget {
           Text(
             context.t(L.percent, [(value * 100).round()]),
             style: TextStyle(color: style.quaternary, fontSize: 11),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _EmptyMixCard extends StatelessWidget {
-  const _EmptyMixCard({required this.onBrowse});
-  final VoidCallback onBrowse;
-
-  @override
-  Widget build(BuildContext context) {
-    final style = RestStyle.of(context);
-    return Container(
-      padding: const EdgeInsets.all(20),
-      decoration: BoxDecoration(
-        color: style.panel,
-        borderRadius: BorderRadius.circular(22),
-        border: Border.all(color: style.outline),
-      ),
-      child: Row(
-        children: [
-          const SoundIcon(
-            sound: Sound(
-              file: '',
-              name: 'Quiet',
-              category: 'Ambient',
-              icon: Icons.spa_rounded,
-            ),
-            size: 48,
-          ),
-          const SizedBox(width: 14),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  context.t(L.startOneSound),
-                  style: TextStyle(
-                    color: style.text,
-                    fontSize: 14,
-                    fontWeight: FontWeight.w600,
-                  ),
-                ),
-                SizedBox(height: 4),
-                Text(
-                  context.t(L.layerFavorites),
-                  style: TextStyle(color: style.quaternary, fontSize: 12),
-                ),
-              ],
-            ),
-          ),
-          IconButton.filledTonal(
-            onPressed: onBrowse,
-            tooltip: context.t(L.browseSounds),
-            icon: const Icon(Icons.add_rounded),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _SuggestionCard extends StatelessWidget {
-  const _SuggestionCard({required this.sound, required this.onAdd});
-  final Sound sound;
-  final VoidCallback onAdd;
-
-  @override
-  Widget build(BuildContext context) {
-    final style = RestStyle.of(context);
-    return Container(
-      width: 148,
-      padding: const EdgeInsets.all(13),
-      decoration: BoxDecoration(
-        color: style.panel,
-        borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: style.outline),
-      ),
-      child: Row(
-        children: [
-          SoundIcon(sound: sound, size: 42),
-          const SizedBox(width: 9),
-          Expanded(
-            child: Column(
-              mainAxisAlignment: MainAxisAlignment.center,
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  context.soundName(sound),
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: TextStyle(
-                    color: style.text,
-                    fontSize: 13,
-                    fontWeight: FontWeight.w600,
-                  ),
-                ),
-                const SizedBox(height: 6),
-                InkWell(
-                  onTap: onAdd,
-                  borderRadius: BorderRadius.circular(20),
-                  child: Padding(
-                    padding: EdgeInsets.symmetric(vertical: 3),
-                    child: Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Icon(Icons.add_rounded, size: 14, color: style.primary),
-                        Text(
-                          context.t(L.add),
-                          style: TextStyle(color: style.primary, fontSize: 11),
-                        ),
-                      ],
-                    ),
-                  ),
-                ),
-              ],
-            ),
           ),
         ],
       ),

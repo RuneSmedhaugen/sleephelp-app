@@ -5,6 +5,25 @@ import '../models/rest_style.dart';
 import '../models/wake_playback.dart';
 import 'sleep_plan_text.dart';
 
+const sleepTimerMinutes = [
+  1,
+  2,
+  5,
+  15,
+  30,
+  45,
+  60,
+  90,
+  120,
+  180,
+  240,
+  360,
+  480,
+  600,
+  720,
+];
+const sleepFadeMinutes = [0, 1, 2, 5, 10, 15, 30, 60, 120];
+
 class SleepTimerSheet extends StatefulWidget {
   const SleepTimerSheet({
     super.key,
@@ -33,9 +52,6 @@ class SleepTimerSheet extends StatefulWidget {
 }
 
 class _SleepTimerSheetState extends State<SleepTimerSheet> {
-  static const _durations = [1, 2, 5, 15, 30, 45, 60, 90];
-  static const _fades = [0, 1, 2, 5, 10, 15];
-
   late int _durationMinutes;
   late int _fadeMinutes;
   bool _saving = false;
@@ -49,15 +65,11 @@ class _SleepTimerSheetState extends State<SleepTimerSheet> {
         ? 5
         : widget.regularFade.inMinutes;
     _followAlarm = widget.offersAlarmPlan && !widget.usesRegularTimerTonight;
-    if (!_durations.contains(_durationMinutes)) _durationMinutes = 45;
     _clampFade();
   }
 
   void _clampFade() {
-    final allowed = _fades.where((minutes) => minutes <= _durationMinutes);
-    if (!allowed.contains(_fadeMinutes)) {
-      _fadeMinutes = allowed.isEmpty ? 0 : allowed.last;
-    }
+    _fadeMinutes = _fadeMinutes.clamp(0, _durationMinutes).toInt();
   }
 
   Future<void> _start() async {
@@ -147,9 +159,15 @@ class _SleepTimerSheetState extends State<SleepTimerSheet> {
               spacing: 8,
               runSpacing: 8,
               children: [
-                for (final minutes in _durations)
+                for (final minutes in ({
+                  ...sleepTimerMinutes,
+                  _durationMinutes,
+                }.toList()..sort()))
                   _TimerChoice(
-                    label: context.t(L.minutes, [minutes]),
+                    label: formatSleepDuration(
+                      context,
+                      Duration(minutes: minutes),
+                    ),
                     selected: _durationMinutes == minutes,
                     onTap: () => setState(() {
                       _durationMinutes = minutes;
@@ -165,9 +183,12 @@ class _SleepTimerSheetState extends State<SleepTimerSheet> {
               spacing: 8,
               runSpacing: 8,
               children: [
-                for (final minutes in _fades.where(
-                  (minutes) => minutes <= _durationMinutes,
-                ))
+                for (final minutes
+                    in ({
+                        ...sleepFadeMinutes,
+                        _fadeMinutes,
+                      }.where((minutes) => minutes <= _durationMinutes).toList()
+                      ..sort()))
                   _TimerChoice(
                     label: minutes == 0
                         ? context.t(L.noFade)

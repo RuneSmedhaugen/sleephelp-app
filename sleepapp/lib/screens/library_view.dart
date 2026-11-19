@@ -13,13 +13,13 @@ class LibraryView extends StatefulWidget {
     required this.sounds,
     required this.selectedSounds,
     required this.onToggleSound,
-    required this.onImport,
+    this.onImport,
   });
 
   final List<Sound> sounds;
   final Set<String> selectedSounds;
   final ValueChanged<Sound> onToggleSound;
-  final Future<bool> Function() onImport;
+  final Future<bool> Function()? onImport;
 
   @override
   State<LibraryView> createState() => _LibraryViewState();
@@ -41,7 +41,7 @@ class _LibraryViewState extends State<LibraryView> {
   Future<void> _importSound() async {
     setState(() => _importing = true);
     try {
-      if (await widget.onImport() && mounted) {
+      if (await widget.onImport!() && mounted) {
         _searchController.clear();
         setState(() => _category = Sound.importedCategory);
       }
@@ -91,7 +91,7 @@ class _LibraryViewState extends State<LibraryView> {
                         ),
                       ),
                     ),
-                    if (!kIsWeb)
+                    if (!kIsWeb && widget.onImport != null)
                       TextButton.icon(
                         onPressed: _importing ? null : _importSound,
                         icon: _importing

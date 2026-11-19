@@ -12,8 +12,11 @@ class SavedMixesView extends StatelessWidget {
     super.key,
     required this.mixes,
     required this.sounds,
-    required this.onPlay,
+    required this.onLoad,
     required this.onDelete,
+    required this.onEdit,
+    required this.onRename,
+    required this.onDuplicate,
     required this.onBrowse,
     required this.rotationSummary,
     required this.onRotation,
@@ -21,8 +24,11 @@ class SavedMixesView extends StatelessWidget {
 
   final List<SoundMix> mixes;
   final List<Sound> sounds;
-  final ValueChanged<SoundMix> onPlay;
+  final ValueChanged<SoundMix> onLoad;
   final ValueChanged<SoundMix> onDelete;
+  final ValueChanged<SoundMix> onEdit;
+  final ValueChanged<SoundMix> onRename;
+  final ValueChanged<SoundMix> onDuplicate;
   final VoidCallback onBrowse;
   final String rotationSummary;
   final VoidCallback onRotation;
@@ -71,8 +77,11 @@ class SavedMixesView extends StatelessWidget {
                     _SavedMixCard(
                       mix: mix,
                       sounds: sounds,
-                      onPlay: () => onPlay(mix),
+                      onLoad: () => onLoad(mix),
                       onDelete: () => onDelete(mix),
+                      onEdit: () => onEdit(mix),
+                      onRename: () => onRename(mix),
+                      onDuplicate: () => onDuplicate(mix),
                     ),
                 ],
                 const SizedBox(height: 12),
@@ -177,14 +186,20 @@ class _SavedMixCard extends StatelessWidget {
   const _SavedMixCard({
     required this.mix,
     required this.sounds,
-    required this.onPlay,
+    required this.onLoad,
     required this.onDelete,
+    required this.onEdit,
+    required this.onRename,
+    required this.onDuplicate,
   });
 
   final SoundMix mix;
   final List<Sound> sounds;
-  final VoidCallback onPlay;
+  final VoidCallback onLoad;
   final VoidCallback onDelete;
+  final VoidCallback onEdit;
+  final VoidCallback onRename;
+  final VoidCallback onDuplicate;
 
   @override
   Widget build(BuildContext context) {
@@ -194,6 +209,12 @@ class _SavedMixCard extends StatelessWidget {
         .toList();
     final soundNames = mixSounds.map(context.soundName).join(' · ');
     final firstSound = mixSounds.isEmpty ? null : mixSounds.first;
+    final actions = {
+      L.editMix: onEdit,
+      L.renameMix: onRename,
+      L.duplicateMix: onDuplicate,
+      L.delete: onDelete,
+    };
 
     return Container(
       margin: const EdgeInsets.only(bottom: 11),
@@ -239,16 +260,20 @@ class _SavedMixCard extends StatelessWidget {
               ],
             ),
           ),
-          IconButton(
-            tooltip: context.t(L.deleteNamed, [mix.name]),
-            onPressed: onDelete,
-            icon: const Icon(Icons.delete_outline_rounded, size: 19),
-            color: style.quaternary,
+          PopupMenuButton<L>(
+            tooltip: context.t(L.mixActions, [mix.name]),
+            onSelected: (action) => actions[action]!(),
+            itemBuilder: (context) => [
+              for (final action in actions.keys)
+                PopupMenuItem(value: action, child: Text(context.t(action))),
+            ],
           ),
-          IconButton.filledTonal(
-            tooltip: context.t(L.playNamed, [mix.name]),
-            onPressed: onPlay,
-            icon: const Icon(Icons.play_arrow_rounded, size: 22),
+          Tooltip(
+            message: context.t(L.loadNamed, [mix.name]),
+            child: FilledButton.tonal(
+              onPressed: onLoad,
+              child: Text(context.t(L.loadMix)),
+            ),
           ),
         ],
       ),

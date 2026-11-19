@@ -41,7 +41,7 @@ String describeSleepPlan(BuildContext context, SleepPlan plan) {
   final duration = plan.playFor;
   final playback = duration == null
       ? ''
-      : context.t(L.playsFor, [_playTime(context, duration)]);
+      : context.t(L.playsFor, [formatSleepDuration(context, duration)]);
   return [
     source,
     if (playback.isNotEmpty) playback,
@@ -50,7 +50,7 @@ String describeSleepPlan(BuildContext context, SleepPlan plan) {
   ].join(' · ');
 }
 
-String _playTime(BuildContext context, Duration duration) {
+String formatSleepDuration(BuildContext context, Duration duration) {
   final minutes = (duration.inSeconds / 60).ceil();
   if (minutes < 1) return context.t(L.shortDuration);
   final hours = minutes ~/ 60;
