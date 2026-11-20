@@ -41,9 +41,7 @@ class MainActivity : AudioServiceActivity() {
                                 requireNotNull(call.argument<Int>("hour")),
                                 requireNotNull(call.argument<Int>("minute")),
                                 requireNotNull(call.argument<List<Int>>("days")),
-                                requireNotNull(call.argument<Boolean>("enabled")),
-                                call.argument<Int>("finishBeforeMinutes"),
-                                call.argument<Int>("fadeMinutes")
+                                requireNotNull(call.argument<Boolean>("enabled"))
                             )
                             result.success(null)
                         }

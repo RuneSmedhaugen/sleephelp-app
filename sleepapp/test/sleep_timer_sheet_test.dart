@@ -22,14 +22,11 @@ void main() {
               body: SleepTimerSheet(
                 regularDuration: Duration(minutes: duration),
                 regularFade: Duration(minutes: fade),
-                offersAlarmPlan: false,
-                usesRegularTimerTonight: false,
-                preview: (duration, fade, _) => SleepPlan(
+                preview: (duration, fade) => SleepPlan(
                   stopAt: DateTime.now().add(duration),
                   playFor: duration,
                   fade: fade,
                 ),
-                onFollowAlarm: () async {},
                 onStart: (duration, fade) async {
                   savedDuration = duration;
                   savedFade = fade;

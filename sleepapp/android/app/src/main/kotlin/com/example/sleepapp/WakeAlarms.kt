@@ -19,9 +19,7 @@ internal data class WakeAlarm(
     val minute: Int,
     val days: List<Int>,
     val nextAt: Long = 0,
-    val snoozedUntil: Long = 0,
-    val finishBeforeMinutes: Int? = null,
-    val fadeMinutes: Int? = null
+    val snoozedUntil: Long = 0
 ) {
     fun nextAfter(now: Long): Long {
         // Start each candidate from today's calendar date so a DST adjustment
@@ -66,9 +64,7 @@ internal class WakeAlarms(private val context: Context) {
         return WakeAlarm(
             id, json.getInt("hour"), json.getInt("minute"),
             List(days.length()) { days.getInt(it) },
-            json.getLong("nextAt"), json.getLong("snoozedUntil"),
-            json.optInt("finishBeforeMinutes", -1).takeIf { it >= 0 },
-            json.optInt("fadeMinutes", -1).takeIf { it >= 0 }
+            json.getLong("nextAt"), json.getLong("snoozedUntil")
         )
     }
 
@@ -79,8 +75,6 @@ internal class WakeAlarms(private val context: Context) {
             .put("days", JSONArray(alarm.days))
             .put("nextAt", alarm.nextAt)
             .put("snoozedUntil", alarm.snoozedUntil)
-            .put("finishBeforeMinutes", alarm.finishBeforeMinutes)
-            .put("fadeMinutes", alarm.fadeMinutes)
         check(store.edit().putString(alarm.id, value.toString()).commit()) {
             "REST couldn't save this alarm."
         }
@@ -100,8 +94,7 @@ internal class WakeAlarms(private val context: Context) {
                     "id" to it.id, "hour" to it.hour, "minute" to it.minute, "days" to it.days,
                     "enabled" to (it.nextAt != 0L), "snoozed" to (it.snoozedUntil != 0L),
                     "nextAt" to it.nextAt.takeIf { canSchedule() },
-                    "snoozedUntil" to it.snoozedUntil.takeIf { canSchedule() },
-                    "finishBeforeMinutes" to it.finishBeforeMinutes, "fadeMinutes" to it.fadeMinutes
+                    "snoozedUntil" to it.snoozedUntil.takeIf { canSchedule() }
                 )
             },
             "ringing" to RingingAlarmService.ringingId,
@@ -110,21 +103,13 @@ internal class WakeAlarms(private val context: Context) {
         )
     }
 
-    fun save(
-        id: String?, hour: Int, minute: Int, days: List<Int>, enabled: Boolean,
-        finishBeforeMinutes: Int?, fadeMinutes: Int?
-    ) {
+    fun save(id: String?, hour: Int, minute: Int, days: List<Int>, enabled: Boolean) {
         require(hour in 0..23 && minute in 0..59 && days.all { it in 1..7 })
-        require(finishBeforeMinutes == null || finishBeforeMinutes in 0..720)
-        require(fadeMinutes == null || fadeMinutes in 0..120)
         if (enabled) {
             if (!canSchedule()) throw AlarmPermissionRequired("exactRequired")
             if (!notificationsAllowed()) throw AlarmPermissionRequired("notificationsRequired")
         }
-        val alarm = WakeAlarm(
-            id ?: UUID.randomUUID().toString(), hour, minute, days.distinct().sorted(),
-            finishBeforeMinutes = finishBeforeMinutes, fadeMinutes = fadeMinutes
-        )
+        val alarm = WakeAlarm(id ?: UUID.randomUUID().toString(), hour, minute, days.distinct().sorted())
         val next = if (enabled) alarm.nextAfter(System.currentTimeMillis()) else 0
         val previous = get(alarm.id)
         put(alarm.copy(nextAt = next))

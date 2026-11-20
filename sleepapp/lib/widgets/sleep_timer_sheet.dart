@@ -29,21 +29,14 @@ class SleepTimerSheet extends StatefulWidget {
     super.key,
     required this.regularDuration,
     required this.regularFade,
-    required this.offersAlarmPlan,
-    required this.usesRegularTimerTonight,
     required this.preview,
-    required this.onFollowAlarm,
     required this.onStart,
     required this.onCancel,
   });
 
   final Duration? regularDuration;
   final Duration regularFade;
-  final bool offersAlarmPlan;
-  final bool usesRegularTimerTonight;
-  final SleepPlan Function(Duration duration, Duration fade, bool follow)
-  preview;
-  final Future<void> Function() onFollowAlarm;
+  final SleepPlan Function(Duration duration, Duration fade) preview;
   final Future<void> Function(Duration duration, Duration fadeOut) onStart;
   final Future<void> Function() onCancel;
 
@@ -55,7 +48,6 @@ class _SleepTimerSheetState extends State<SleepTimerSheet> {
   late int _durationMinutes;
   late int _fadeMinutes;
   bool _saving = false;
-  late bool _followAlarm;
 
   @override
   void initState() {
@@ -64,7 +56,6 @@ class _SleepTimerSheetState extends State<SleepTimerSheet> {
     _fadeMinutes = widget.regularDuration == null
         ? 5
         : widget.regularFade.inMinutes;
-    _followAlarm = widget.offersAlarmPlan && !widget.usesRegularTimerTonight;
     _clampFade();
   }
 
@@ -75,14 +66,10 @@ class _SleepTimerSheetState extends State<SleepTimerSheet> {
   Future<void> _start() async {
     setState(() => _saving = true);
     try {
-      if (_followAlarm) {
-        await widget.onFollowAlarm();
-      } else {
-        await widget.onStart(
-          Duration(minutes: _durationMinutes),
-          Duration(minutes: _fadeMinutes),
-        );
-      }
+      await widget.onStart(
+        Duration(minutes: _durationMinutes),
+        Duration(minutes: _fadeMinutes),
+      );
     } finally {
       if (mounted) setState(() => _saving = false);
     }
@@ -104,7 +91,6 @@ class _SleepTimerSheetState extends State<SleepTimerSheet> {
     final plan = widget.preview(
       Duration(minutes: _durationMinutes),
       Duration(minutes: _fadeMinutes),
-      _followAlarm,
     );
     return SingleChildScrollView(
       padding: EdgeInsets.fromLTRB(22, 10, 22, 22 + bottomInset),
@@ -133,72 +119,52 @@ class _SleepTimerSheetState extends State<SleepTimerSheet> {
             ),
           ),
           const SizedBox(height: 6),
-          if (widget.offersAlarmPlan) ...[
-            Wrap(
-              spacing: 8,
-              runSpacing: 4,
-              children: [
+          const SizedBox(height: 24),
+          _TimerLabel(context.t(L.playFor)),
+          const SizedBox(height: 11),
+          Wrap(
+            spacing: 8,
+            runSpacing: 8,
+            children: [
+              for (final minutes in ({
+                ...sleepTimerMinutes,
+                _durationMinutes,
+              }.toList()..sort()))
                 _TimerChoice(
-                  label: context.t(L.followAlarm),
-                  selected: _followAlarm,
-                  onTap: () => setState(() => _followAlarm = true),
+                  label: formatSleepDuration(
+                    context,
+                    Duration(minutes: minutes),
+                  ),
+                  selected: _durationMinutes == minutes,
+                  onTap: () => setState(() {
+                    _durationMinutes = minutes;
+                    _clampFade();
+                  }),
                 ),
+            ],
+          ),
+          const SizedBox(height: 23),
+          _TimerLabel(context.t(L.fadeOver)),
+          const SizedBox(height: 11),
+          Wrap(
+            spacing: 8,
+            runSpacing: 8,
+            children: [
+              for (final minutes
+                  in ({
+                      ...sleepFadeMinutes,
+                      _fadeMinutes,
+                    }.where((minutes) => minutes <= _durationMinutes).toList()
+                    ..sort()))
                 _TimerChoice(
-                  label: context.t(L.sleepTimerTonight),
-                  selected: !_followAlarm,
-                  onTap: () => setState(() => _followAlarm = false),
+                  label: minutes == 0
+                      ? context.t(L.noFade)
+                      : context.t(L.minutes, [minutes]),
+                  selected: _fadeMinutes == minutes,
+                  onTap: () => setState(() => _fadeMinutes = minutes),
                 ),
-              ],
-            ),
-          ],
-          if (!_followAlarm) ...[
-            const SizedBox(height: 24),
-            _TimerLabel(context.t(L.playFor)),
-            const SizedBox(height: 11),
-            Wrap(
-              spacing: 8,
-              runSpacing: 8,
-              children: [
-                for (final minutes in ({
-                  ...sleepTimerMinutes,
-                  _durationMinutes,
-                }.toList()..sort()))
-                  _TimerChoice(
-                    label: formatSleepDuration(
-                      context,
-                      Duration(minutes: minutes),
-                    ),
-                    selected: _durationMinutes == minutes,
-                    onTap: () => setState(() {
-                      _durationMinutes = minutes;
-                      _clampFade();
-                    }),
-                  ),
-              ],
-            ),
-            const SizedBox(height: 23),
-            _TimerLabel(context.t(L.fadeOver)),
-            const SizedBox(height: 11),
-            Wrap(
-              spacing: 8,
-              runSpacing: 8,
-              children: [
-                for (final minutes
-                    in ({
-                        ...sleepFadeMinutes,
-                        _fadeMinutes,
-                      }.where((minutes) => minutes <= _durationMinutes).toList()
-                      ..sort()))
-                  _TimerChoice(
-                    label: minutes == 0
-                        ? context.t(L.noFade)
-                        : context.t(L.minutes, [minutes]),
-                    selected: _fadeMinutes == minutes,
-                    onTap: () => setState(() => _fadeMinutes = minutes),
-                  ),
-              ],
-            ),
-          ],
+            ],
+          ),
           const SizedBox(height: 13),
           Container(
             width: double.infinity,
@@ -229,15 +195,11 @@ class _SleepTimerSheetState extends State<SleepTimerSheet> {
                         height: 18,
                         child: CircularProgressIndicator(strokeWidth: 2),
                       )
-                    : Text(
-                        context.t(
-                          _followAlarm ? L.followAlarm : L.setSleepTimer,
-                        ),
-                      ),
+                    : Text(context.t(L.setSleepTimer)),
               ),
             ),
           ),
-          if (!_followAlarm && widget.regularDuration != null) ...[
+          if (widget.regularDuration != null) ...[
             const SizedBox(height: 7),
             SizedBox(
               width: double.infinity,

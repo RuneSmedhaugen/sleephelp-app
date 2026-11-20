@@ -233,15 +233,9 @@ void main() {
     },
   );
 
-  test(
-    'nearby custom alarms win until the user explicitly chooses the mix timer',
-    () async {
+  test('an alarm caps the saved mix timer at its ring time', () async {
       final handler = createHandler(FakeSleepPlayer());
-      final wake = WakePlayback(
-        DateTime.now().add(const Duration(hours: 2)),
-        finishBefore: const Duration(hours: 1),
-        fade: const Duration(minutes: 10),
-      );
+      final wake = WakePlayback(DateTime.now().add(const Duration(hours: 2)));
       await handler.updateWakeAlarm(wake, ringing: false, didRing: false);
       await handler.replaceMix(
         {'rain.mp3': null},
@@ -253,29 +247,23 @@ void main() {
         ),
       );
       final plan = handler.previewSleepPlan();
-      expect(plan.followsAlarm, isTrue);
-      expect(plan.stopAt, wake.customStop);
-      expect(plan.fade, const Duration(minutes: 10));
+      expect(plan.cappedAtAlarm, isTrue);
+      expect(plan.stopAt, wake.ringsAt);
+      expect(plan.fade, const Duration(minutes: 20));
       await handler.startSleepTimer(
         duration: handler.regularTimerDuration!,
         fadeOut: handler.regularTimerFade,
       );
       final override = handler.previewSleepPlan();
-      expect(override.followsAlarm, isFalse);
       expect(override.timerShortened, isTrue);
       expect(override.stopAt, wake.ringsAt);
       expect(override.fade, const Duration(minutes: 20));
-    },
-  );
+  });
 
   test('an alarm two days away uses the saved mix timer and fade', () async {
     final handler = createHandler(FakeSleepPlayer());
     await handler.updateWakeAlarm(
-      WakePlayback(
-        DateTime.now().add(const Duration(days: 2)),
-        finishBefore: const Duration(hours: 1),
-        fade: const Duration(minutes: 10),
-      ),
+      WakePlayback(DateTime.now().add(const Duration(days: 2))),
       ringing: false,
       didRing: false,
     );
@@ -289,7 +277,6 @@ void main() {
       ),
     );
     final plan = handler.previewSleepPlan();
-    expect(plan.followsAlarm, isFalse);
     expect(plan.cappedAtAlarm, isFalse);
     expect(plan.playFor!.inSeconds, closeTo(14400, 1));
     expect(plan.fade, const Duration(minutes: 20));

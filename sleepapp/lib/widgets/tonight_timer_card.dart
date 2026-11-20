@@ -51,13 +51,7 @@ class TonightTimerCard extends StatelessWidget {
           final title = active
               ? alarm == null
                     ? context.t(L.sleepTimer)
-                    : state.followsAlarm
-                    ? context.t(L.followingAlarm, [
-                        formatSleepTime(context, alarm),
-                      ])
-                    : context.t(L.stopsAtAlarm, [
-                        formatSleepTime(context, alarm),
-                      ])
+              : context.t(L.stopsAtAlarm, [formatSleepTime(context, alarm)])
               : context.t(L.playbackPlan);
           return Column(
             crossAxisAlignment: embedded

@@ -18,15 +18,10 @@ String formatSleepTime(BuildContext context, DateTime date) {
 String describeSleepPlan(BuildContext context, SleepPlan plan) {
   final alarm = plan.alarmAt;
   final stop = plan.stopAt;
-  if (plan.blocked && plan.followsAlarm) {
-    return context.t(L.pastStop);
-  }
   if (plan.blocked) return context.t(L.stopOrSnooze);
   if (stop == null) return context.t(L.chooseEnd);
 
-  final source = plan.followsAlarm && alarm != null
-      ? context.t(L.followingAlarm, [formatSleepTime(context, alarm)])
-      : plan.timerShortened
+  final source = plan.timerShortened
       ? context.t(L.timerShortened)
       : plan.cappedAtAlarm
       ? context.t(L.endsAtAlarm)

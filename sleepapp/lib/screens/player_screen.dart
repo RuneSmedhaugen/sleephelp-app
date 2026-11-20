@@ -489,6 +489,7 @@ class _PlayerScreenState extends State<PlayerScreen> {
         duration: _audio.regularTimerDuration,
         fade: _audio.regularTimerFade,
       ),
+      requestName: (initialName) => _askForMixName(initialName: initialName),
       onSave: (draft, saveAsNew) async {
         final saved = saveAsNew
             ? draft.copyWith(
@@ -558,6 +559,7 @@ class _PlayerScreenState extends State<PlayerScreen> {
         isSavedMix: original != null,
         sounds: _sounds,
         suggestedTimer: timer,
+        requestName: (initialName) => _askForMixName(initialName: initialName),
         onUnload: _unloadCurrentMix,
         onSoundToggle: (sound) async {
           await _toggleSound(sound);
@@ -680,18 +682,10 @@ class _PlayerScreenState extends State<PlayerScreen> {
       builder: (sheetContext) => SleepTimerSheet(
         regularDuration: _audio.regularTimerDuration,
         regularFade: _audio.regularTimerFade,
-        offersAlarmPlan: _audio.offersAlarmPlan,
-        usesRegularTimerTonight: _audio.usesRegularTimerTonight,
-        preview: (duration, fade, follow) => _audio.previewSleepPlan(
+        preview: (duration, fade) => _audio.previewSleepPlan(
           duration: duration,
           fade: fade,
-          followAlarm: follow,
         ),
-        onFollowAlarm: () async {
-          await _audio.followWakeAlarm();
-          if (mounted) setState(() {});
-          if (sheetContext.mounted) Navigator.pop(sheetContext);
-        },
         onStart: (duration, fadeOut) async {
           await _audio.startSleepTimer(duration: duration, fadeOut: fadeOut);
           if (mounted) setState(() {});

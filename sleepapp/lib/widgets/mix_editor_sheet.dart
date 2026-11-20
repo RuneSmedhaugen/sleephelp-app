@@ -15,6 +15,7 @@ class MixEditorSheet extends StatefulWidget {
     required this.mix,
     required this.sounds,
     required this.onSave,
+    this.requestName,
     this.suggestedTimer,
     this.onSoundToggle,
     this.onVolumeChanged,
@@ -26,6 +27,7 @@ class MixEditorSheet extends StatefulWidget {
   final SoundMix mix;
   final List<Sound> sounds;
   final Future<bool> Function(SoundMix draft, bool saveAsNew) onSave;
+  final Future<String?> Function(String initialName)? requestName;
   final MixTimerSettings? suggestedTimer;
   final Future<bool> Function(Sound)? onSoundToggle;
   final Future<double> Function(String, double)? onVolumeChanged;
@@ -161,11 +163,21 @@ class _MixEditorSheetState extends State<MixEditorSheet> {
       _failed = false;
       _unloadFailed = false;
     });
+    final requestName = widget.requestName;
+    final name = requestName != null && (!widget.isSavedMix || saveAsNew)
+        ? await requestName(_name.text.trim())
+        : _name.text.trim();
+    if (!mounted) return;
+    if (name == null || name.trim().isEmpty) {
+      setState(() => _saving = false);
+      return;
+    }
+    _name.text = name.trim();
     var saved = false;
     try {
       saved = await widget.onSave(
         widget.mix.copyWith(
-          name: _name.text.trim(),
+          name: name.trim(),
           sounds: _selected.toList(),
           volumes: {for (final file in _selected) file: _volumes[file] ?? 1},
           updatedAt: DateTime.now(),

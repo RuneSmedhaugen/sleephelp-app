@@ -68,10 +68,8 @@ class SleepAudioHandler extends BaseAudioHandler {
   MixTimerSettings? _mixTimer;
   WakePlayback? _nextWake;
   bool _wakeRinging = false;
-  bool _useRegularTimerTonight = false;
   DateTime? _wallStopAt;
   DateTime? _wallAlarmAt;
-  bool _wallFollowsAlarm = false;
   Duration _wallFade = Duration.zero;
   Duration? _wallDuration;
   bool _timerCompleted = false;
@@ -90,32 +88,20 @@ class SleepAudioHandler extends BaseAudioHandler {
   Duration? get regularTimerDuration =>
       _mixTimer == null ? _regularDuration : _mixTimer!.duration;
   Duration get regularTimerFade => _mixTimer?.fade ?? _regularFade;
-  bool get usesRegularTimerTonight => _useRegularTimerTonight;
-  bool get offersAlarmPlan =>
-      _nextWake?.offersCustomPlan(DateTime.now()) ?? false;
-
   SleepPlan previewSleepPlan({
     Duration? duration,
     Duration? fade,
-    bool? followAlarm,
   }) {
     final now = DateTime.now();
     final wake = _nextWake;
     final total = duration ?? regularTimerDuration;
     final regularStop = total == null ? null : now.add(total);
-    final follows =
-        wake != null &&
-        wake.offersCustomPlan(now) &&
-        (followAlarm ?? !_useRegularTimerTonight);
     final alarmAt = wake?.ringsAt;
     final capped =
-        !follows &&
         alarmAt != null &&
         (regularStop == null || alarmAt.isBefore(regularStop));
-    final stop = follows ? wake.customStop : (capped ? alarmAt : regularStop);
-    final requestedFade = follows
-        ? wake.fade ?? Duration.zero
-        : fade ?? regularTimerFade;
+    final stop = capped ? alarmAt : regularStop;
+    final requestedFade = fade ?? regularTimerFade;
     final effectiveFade = _availableFade(requestedFade, stop?.difference(now));
     return SleepPlan(
       stopAt: stop,
@@ -123,7 +109,6 @@ class SleepAudioHandler extends BaseAudioHandler {
       playFor: stop?.difference(now),
       fade: effectiveFade,
       fadeShortened: effectiveFade < requestedFade,
-      followsAlarm: follows,
       cappedAtAlarm: capped,
       timerShortened: capped && total != null,
       blocked: _wakeRinging || (stop != null && !stop.isAfter(now)),
@@ -155,12 +140,6 @@ class SleepAudioHandler extends BaseAudioHandler {
       }
     });
   }
-
-  Future<void> followWakeAlarm() => _enqueueTransport(() async {
-    _useRegularTimerTonight = false;
-    if (_hasPlaybackSession) await _applySleepPlan();
-    _publishTimerState();
-  });
 
   /// Add one looped sound. Concurrent requests for the same sound share one
   /// load operation, and a failed load always releases its player.
@@ -248,7 +227,6 @@ class SleepAudioHandler extends BaseAudioHandler {
     }
     if (restoreTimer || timer != null) {
       _mixTimer = timer;
-      _useRegularTimerTonight = false;
       await _applySleepPlan();
       _publishTimerState();
     }
@@ -335,7 +313,6 @@ class SleepAudioHandler extends BaseAudioHandler {
     _mixTimer = null;
     _regularDuration = duration;
     _regularFade = fadeOut;
-    _useRegularTimerTonight = offersAlarmPlan;
     await _applySleepPlan();
     _publishTimerState();
   }
@@ -347,7 +324,6 @@ class SleepAudioHandler extends BaseAudioHandler {
     _mixTimer = null;
     _regularDuration = null;
     _regularFade = Duration.zero;
-    _useRegularTimerTonight = offersAlarmPlan;
     await _applySleepPlan();
     _publishTimerState();
   }
@@ -414,7 +390,6 @@ class SleepAudioHandler extends BaseAudioHandler {
     _isPlaying = false;
     _hasPlaybackSession = false;
     await _runForAll((_, player) => _stopAndRewind(player));
-    _useRegularTimerTonight = false;
     _cancelSleepTimer(resetFade: true);
     await _applyVolumesToAll();
     _pauseRequested = false;
@@ -625,16 +600,14 @@ class SleepAudioHandler extends BaseAudioHandler {
       return false;
     }
     _cancelSleepTimer(resetFade: false);
-    _timerDuration = plan.followsAlarm ? null : regularTimerDuration;
-    _fadeDuration = plan.followsAlarm ? Duration.zero : regularTimerFade;
-    final wallStop = plan.followsAlarm ? plan.stopAt : plan.alarmAt;
+    _timerDuration = regularTimerDuration;
+    _fadeDuration = regularTimerFade;
     final alarmAt = plan.alarmAt;
-    if (wallStop != null && alarmAt != null) {
+    if (plan.stopAt != null && alarmAt != null) {
       _setWallStop(
-        wallStop,
-        plan.followsAlarm ? plan.fade : regularTimerFade,
+        alarmAt,
+        regularTimerFade,
         alarmAt: alarmAt,
-        followsAlarm: plan.followsAlarm,
       );
     }
     await _setFadeGain(1.0);
@@ -653,11 +626,9 @@ class SleepAudioHandler extends BaseAudioHandler {
     DateTime stop,
     Duration fade, {
     required DateTime alarmAt,
-    bool followsAlarm = false,
   }) {
     _wallStopAt = stop;
     _wallAlarmAt = alarmAt;
-    _wallFollowsAlarm = followsAlarm;
     final remaining = stop.difference(DateTime.now());
     _wallDuration = remaining > Duration.zero ? remaining : _timerTickInterval;
     _wallFade = _availableFade(fade, remaining);
@@ -788,7 +759,6 @@ class SleepAudioHandler extends BaseAudioHandler {
     _timerBaseElapsed = _timerDuration ?? Duration.zero;
     _timerCompleted = true;
     _resumeAfterInterruption = false;
-    _useRegularTimerTonight = false;
     _playIntent = false;
     _isPlaying = false;
     _hasPlaybackSession = false;
@@ -818,7 +788,6 @@ class SleepAudioHandler extends BaseAudioHandler {
               : _timerStopwatch.isRunning),
       isCompleted: _timerCompleted,
       alarmAt: timer.usesWallClock ? _wallAlarmAt : null,
-      followsAlarm: timer.usesWallClock && _wallFollowsAlarm,
     );
   }
 
@@ -839,7 +808,6 @@ class SleepAudioHandler extends BaseAudioHandler {
     _fadeDuration = Duration.zero;
     _wallStopAt = null;
     _wallAlarmAt = null;
-    _wallFollowsAlarm = false;
     _wallDuration = null;
     _wallFade = Duration.zero;
     _timerCompleted = false;
@@ -881,7 +849,6 @@ class SleepTimerState {
     required this.isRunning,
     required this.isCompleted,
     this.alarmAt,
-    this.followsAlarm = false,
   });
 
   const SleepTimerState.inactive()
@@ -891,7 +858,6 @@ class SleepTimerState {
       isRunning = false,
       isCompleted = false,
       alarmAt = null,
-      followsAlarm = false;
 
   final Duration? duration;
   final Duration remaining;
@@ -899,7 +865,6 @@ class SleepTimerState {
   final bool isRunning;
   final bool isCompleted;
   final DateTime? alarmAt;
-  final bool followsAlarm;
 
   bool get isActive => duration != null;
   Duration? get untilFade {

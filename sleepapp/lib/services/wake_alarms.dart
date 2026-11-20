@@ -16,8 +16,6 @@ class WakeAlarm {
     this.snoozed = false,
     this.nextAt,
     this.snoozedUntil,
-    this.finishBeforeMinutes,
-    this.fadeMinutes,
   });
 
   final String? id;
@@ -27,8 +25,6 @@ class WakeAlarm {
   final bool snoozed;
   final DateTime? nextAt;
   final DateTime? snoozedUntil;
-  final int? finishBeforeMinutes;
-  final int? fadeMinutes;
 
   factory WakeAlarm.fromMap(Map<Object?, Object?> map) => WakeAlarm(
     id: map['id'] as String,
@@ -38,8 +34,6 @@ class WakeAlarm {
     snoozed: map['snoozed'] as bool,
     nextAt: _date(map['nextAt']),
     snoozedUntil: _date(map['snoozedUntil']),
-    finishBeforeMinutes: map['finishBeforeMinutes'] as int?,
-    fadeMinutes: map['fadeMinutes'] as int?,
   );
 
   static DateTime? _date(Object? millis) => millis is int && millis > 0
@@ -52,8 +46,6 @@ class WakeAlarm {
     'minute': time.minute,
     'days': days,
     'enabled': enabled,
-    'finishBeforeMinutes': finishBeforeMinutes,
-    'fadeMinutes': fadeMinutes,
   };
 }
 
@@ -106,13 +98,7 @@ class WakeAlarms extends ChangeNotifier {
       final next = alarm.nextAt;
       if (next != null &&
           (earliest == null || next.isBefore(earliest.ringsAt))) {
-        earliest = WakePlayback(
-          next,
-          finishBefore: alarm.finishBeforeMinutes == null
-              ? null
-              : Duration(minutes: alarm.finishBeforeMinutes!),
-          fade: Duration(minutes: alarm.fadeMinutes ?? 0),
-        );
+        earliest = WakePlayback(next);
       }
       final snooze = alarm.snoozedUntil;
       if (snooze != null &&
@@ -206,8 +192,6 @@ class WakeAlarms extends ChangeNotifier {
                 a.snoozed != b.snoozed ||
                 a.nextAt != b.nextAt ||
                 a.snoozedUntil != b.snoozedUntil ||
-                a.finishBeforeMinutes != b.finishBeforeMinutes ||
-                a.fadeMinutes != b.fadeMinutes ||
                 !listEquals(a.days, b.days);
           });
       alarms = nextAlarms;

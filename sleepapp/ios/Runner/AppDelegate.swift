@@ -84,8 +84,6 @@ private final class RestAlarmBridge {
     let days: [Int]
     var scheduleID: UUID?
     var snoozeID: UUID?
-    var finishBeforeMinutes: Int?
-    var fadeMinutes: Int?
     var oneTimeDate: Date?
     var snoozedUntil: Date?
 
@@ -128,14 +126,8 @@ private final class RestAlarmBridge {
               let enabled = args["enabled"] as? Bool else {
           throw AlarmFailure.invalid
         }
-        let finishBefore = args["finishBeforeMinutes"] as? Int
-        let fade = args["fadeMinutes"] as? Int
-        guard (0...720).contains(finishBefore ?? 0), (0...120).contains(fade ?? 0) else {
-          throw AlarmFailure.invalid
-        }
         try await save(SavedAlarm(
-          id: id ?? UUID(), hour: hour, minute: minute, days: days,
-          finishBeforeMinutes: finishBefore, fadeMinutes: fade
+          id: id ?? UUID(), hour: hour, minute: minute, days: days
         ), enabled: enabled)
         result(nil)
       case "stop", "delete", "snooze":
@@ -210,8 +202,6 @@ private final class RestAlarmBridge {
             .map(milliseconds)
         }
         if snoozed { serialized["snoozedUntil"] = alarm.snoozedUntil.map(milliseconds) }
-        serialized["finishBeforeMinutes"] = alarm.finishBeforeMinutes
-        serialized["fadeMinutes"] = alarm.fadeMinutes
         return serialized
       },
       "permissions": permissions,

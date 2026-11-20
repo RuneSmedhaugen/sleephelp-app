@@ -133,9 +133,6 @@ class AlarmsView extends StatelessWidget {
                                     time: alarm.time,
                                     days: alarm.days,
                                     enabled: value,
-                                    finishBeforeMinutes:
-                                        alarm.finishBeforeMinutes,
-                                    fadeMinutes: alarm.fadeMinutes,
                                   ),
                                 ),
                         ),
@@ -212,9 +209,6 @@ class _AlarmEditorState extends State<_AlarmEditor> {
   late TimeOfDay _time =
       widget.alarm?.time ?? const TimeOfDay(hour: 7, minute: 0);
   late Set<int> _days = {...?widget.alarm?.days};
-  late bool _customPlayback = widget.alarm?.finishBeforeMinutes != null;
-  late int _finishBefore = widget.alarm?.finishBeforeMinutes ?? 60;
-  late int _fade = widget.alarm?.fadeMinutes ?? 10;
   bool _saving = false;
   L? _error;
 
@@ -229,8 +223,6 @@ class _AlarmEditorState extends State<_AlarmEditor> {
         time: _time,
         days: _days.toList()..sort(),
         enabled: widget.alarm?.enabled ?? true,
-        finishBeforeMinutes: _customPlayback ? _finishBefore : null,
-        fadeMinutes: _customPlayback ? _fade : null,
       ),
     );
     if (!mounted) return;
@@ -316,50 +308,6 @@ class _AlarmEditorState extends State<_AlarmEditor> {
               ],
             ),
             const SizedBox(height: 16),
-            SwitchListTile(
-              contentPadding: EdgeInsets.zero,
-              title: Text(context.t(L.customFade)),
-              subtitle: Text(context.t(L.customFadeDetails)),
-              value: _customPlayback,
-              onChanged: _saving
-                  ? null
-                  : (value) => setState(() => _customPlayback = value),
-            ),
-            if (_customPlayback) ...[
-              const SizedBox(height: 10),
-              _minutesField(
-                title: context.t(L.finishSounds),
-                selected: _finishBefore,
-                choices: const [
-                  0,
-                  15,
-                  30,
-                  45,
-                  60,
-                  90,
-                  120,
-                  180,
-                  240,
-                  360,
-                  480,
-                  720,
-                ],
-                label: (minutes) => minutes == 0
-                    ? context.t(L.atAlarm)
-                    : context.t(L.beforeAlarm, [_durationLabel(minutes)]),
-                onChanged: (value) => setState(() => _finishBefore = value),
-              ),
-              const SizedBox(height: 10),
-              _minutesField(
-                title: context.t(L.fadeOver),
-                selected: _fade,
-                choices: const [0, 2, 5, 10, 15, 20, 30, 45, 60, 90, 120],
-                label: (minutes) => minutes == 0
-                    ? context.t(L.noFade)
-                    : _durationLabel(minutes),
-                onChanged: (value) => setState(() => _fade = value),
-              ),
-            ],
             if (_error case final error?) ...[
               const SizedBox(height: 10),
               Text(
@@ -383,30 +331,6 @@ class _AlarmEditorState extends State<_AlarmEditor> {
     );
   }
 
-  Widget _minutesField({
-    required String title,
-    required int selected,
-    required List<int> choices,
-    required String Function(int) label,
-    required ValueChanged<int> onChanged,
-  }) => DropdownButtonFormField<int>(
-    decoration: InputDecoration(labelText: title),
-    initialValue: selected,
-    isExpanded: true,
-    items: [
-      for (final minutes in ({...choices, selected}.toList()..sort()))
-        DropdownMenuItem(value: minutes, child: Text(label(minutes))),
-    ],
-    onChanged: _saving
-        ? null
-        : (value) {
-            if (value != null) onChanged(value);
-          },
-  );
-
-  String _durationLabel(int minutes) => minutes % 60 == 0
-      ? context.t(L.hours, [minutes ~/ 60])
-      : context.t(L.minutes, [minutes]);
 }
 
 class RingingAlarmBanner extends StatelessWidget {
