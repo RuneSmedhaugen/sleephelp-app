@@ -16,7 +16,6 @@ String formatSleepTime(BuildContext context, DateTime date) {
 }
 
 String describeSleepPlan(BuildContext context, SleepPlan plan) {
-  final alarm = plan.alarmAt;
   final stop = plan.stopAt;
   if (plan.blocked) return context.t(L.stopOrSnooze);
   if (stop == null) return context.t(L.chooseEnd);

@@ -1,11 +1,13 @@
 import 'dart:async';
+import 'dart:convert';
 
-import 'package:flutter/foundation.dart' show listEquals;
+import 'package:flutter/foundation.dart' show listEquals, kIsWeb;
 import 'package:flutter/services.dart';
 import 'package:material_ui/material_ui.dart';
 
 import '../l10n/rest_strings.dart';
 import '../models/wake_playback.dart';
+import 'browser_store.dart';
 
 class WakeAlarm {
   const WakeAlarm({
@@ -156,6 +158,7 @@ class WakeAlarms extends ChangeNotifier {
   }
 
   Future<bool> _readStatus() async {
+    if (kIsWeb) return _demoStatus();
     var changed = !ready;
     try {
       final data = await _channel.invokeMapMethod<Object?, Object?>('status');
@@ -219,7 +222,11 @@ class WakeAlarms extends ChangeNotifier {
     error = null;
     _notify();
     try {
-      await _channel.invokeMethod<void>(method, arguments);
+      if (kIsWeb) {
+        _demoAction(method, arguments);
+      } else {
+        await _channel.invokeMethod<void>(method, arguments);
+      }
     } on PlatformException catch (exception) {
       error = switch (exception.code) {
         'exactRequired' => L.exactRequired,
@@ -251,6 +258,103 @@ class WakeAlarms extends ChangeNotifier {
 
   void _notify() {
     if (!_disposed) notifyListeners();
+  }
+
+  DateTime _demoNext(WakeAlarm alarm, DateTime now) {
+    for (var offset = 0; offset <= 7; offset++) {
+      final candidate = DateTime(
+        now.year,
+        now.month,
+        now.day + offset,
+        alarm.time.hour,
+        alarm.time.minute,
+      );
+      if (candidate.isAfter(now) &&
+          (alarm.days.isEmpty || alarm.days.contains(candidate.weekday))) {
+        return candidate;
+      }
+    }
+    return now.add(const Duration(days: 7));
+  }
+
+  List<dynamic> _demoRecords() {
+    final raw = browserRead('rest_alarms');
+    return raw == null ? <dynamic>[] : jsonDecode(raw) as List<dynamic>;
+  }
+
+  Future<bool> _demoStatus() async {
+    final records = _demoRecords();
+    final now = DateTime.now();
+    var changed = !ready;
+    for (final dynamic row in records) {
+      final due = row['snoozedUntil'] ?? row['nextAt'];
+      if (due is int &&
+          due <= now.millisecondsSinceEpoch &&
+          ringingId == null) {
+        ringingId = row['id'] as String;
+        lastRing = now.millisecondsSinceEpoch;
+        row['snoozedUntil'] = null;
+        if ((row['days'] as List).isEmpty) {
+          row['enabled'] = false;
+          row['nextAt'] = null;
+        } else {
+          row['nextAt'] = _demoNext(
+            WakeAlarm.fromMap((row as Map).cast<Object?, Object?>()),
+            now,
+          ).millisecondsSinceEpoch;
+        }
+        changed = true;
+      }
+      row['snoozed'] = row['snoozedUntil'] != null;
+    }
+    browserWrite('rest_alarms', jsonEncode(records));
+    alarms = records
+        .map((row) => WakeAlarm.fromMap((row as Map).cast<Object?, Object?>()))
+        .toList();
+    permissions = const [];
+    ready = true;
+    _updatePolling();
+    return changed;
+  }
+
+  void _demoAction(String method, Map<String, Object?> arguments) {
+    final records = _demoRecords();
+    final id = arguments['id'] as String?;
+    if (method == 'save') {
+      final alarm = WakeAlarm(
+        time: TimeOfDay(
+          hour: arguments['hour'] as int,
+          minute: arguments['minute'] as int,
+        ),
+        days: (arguments['days'] as List).cast<int>(),
+        enabled: arguments['enabled'] as bool,
+      );
+      records.removeWhere((row) => id != null && row['id'] == id);
+      records.add({
+        ...arguments,
+        'id': id ?? DateTime.now().microsecondsSinceEpoch.toString(),
+        'snoozed': false,
+        'snoozedUntil': null,
+        'nextAt': alarm.enabled
+            ? _demoNext(alarm, DateTime.now()).millisecondsSinceEpoch
+            : null,
+      });
+    } else if (method == 'delete') {
+      records.removeWhere((row) => row['id'] == id);
+      if (ringingId == id) ringingId = null;
+    } else if (method == 'stop') {
+      ringingId = null;
+    } else if (method == 'snooze') {
+      for (final dynamic row in records) {
+        if (row['id'] == id) {
+          row['snoozedUntil'] = DateTime.now()
+              .add(const Duration(minutes: 10))
+              .millisecondsSinceEpoch;
+        }
+      }
+      ringingId = null;
+    }
+    browserWrite('rest_alarms', jsonEncode(records));
   }
 
   @override

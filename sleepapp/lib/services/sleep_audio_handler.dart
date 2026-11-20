@@ -88,10 +88,7 @@ class SleepAudioHandler extends BaseAudioHandler {
   Duration? get regularTimerDuration =>
       _mixTimer == null ? _regularDuration : _mixTimer!.duration;
   Duration get regularTimerFade => _mixTimer?.fade ?? _regularFade;
-  SleepPlan previewSleepPlan({
-    Duration? duration,
-    Duration? fade,
-  }) {
+  SleepPlan previewSleepPlan({Duration? duration, Duration? fade}) {
     final now = DateTime.now();
     final wake = _nextWake;
     final total = duration ?? regularTimerDuration;
@@ -604,11 +601,7 @@ class SleepAudioHandler extends BaseAudioHandler {
     _fadeDuration = regularTimerFade;
     final alarmAt = plan.alarmAt;
     if (plan.stopAt != null && alarmAt != null) {
-      _setWallStop(
-        alarmAt,
-        regularTimerFade,
-        alarmAt: alarmAt,
-      );
+      _setWallStop(alarmAt, regularTimerFade, alarmAt: alarmAt);
     }
     await _setFadeGain(1.0);
     if (_isPlaying) _resumeTimerClock();
@@ -622,11 +615,7 @@ class SleepAudioHandler extends BaseAudioHandler {
     return remaining.isNegative ? Duration.zero : remaining;
   }
 
-  void _setWallStop(
-    DateTime stop,
-    Duration fade, {
-    required DateTime alarmAt,
-  }) {
+  void _setWallStop(DateTime stop, Duration fade, {required DateTime alarmAt}) {
     _wallStopAt = stop;
     _wallAlarmAt = alarmAt;
     final remaining = stop.difference(DateTime.now());
@@ -857,7 +846,7 @@ class SleepTimerState {
       fadeOut = Duration.zero,
       isRunning = false,
       isCompleted = false,
-      alarmAt = null,
+      alarmAt = null;
 
   final Duration? duration;
   final Duration remaining;

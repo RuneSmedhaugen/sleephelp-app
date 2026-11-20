@@ -100,11 +100,6 @@ class _PlayerScreenState extends State<PlayerScreen> {
     _savedMixes = widget.savedMixes;
     _rotation = widget.rotation;
     _lastPlayedId = widget.lastPlayedId;
-    if (widget.demoMode) {
-      _wakeAlarms
-        ..permissions = ['unsupported']
-        ..ready = true;
-    }
     _isPlaying = _audio.isPlaying;
     _hadPlaybackSession = _audio.hasPlaybackSession;
     _audio.refreshAlarmSchedule = _wakeAlarms.refresh;
@@ -364,7 +359,6 @@ class _PlayerScreenState extends State<PlayerScreen> {
   }
 
   Future<void> _togglePlayback() async {
-    if (widget.demoMode) return;
     if (_switchingMix || _busySounds.isNotEmpty) return;
     try {
       if (_audio.isPlaying) {
@@ -388,7 +382,6 @@ class _PlayerScreenState extends State<PlayerScreen> {
   }
 
   Future<void> _stopPlayback() async {
-    if (widget.demoMode) return;
     try {
       await _audio.stop();
     } catch (error) {
@@ -617,7 +610,6 @@ class _PlayerScreenState extends State<PlayerScreen> {
   }
 
   Future<void> _loadSavedMix(SoundMix mix) async {
-    if (widget.demoMode) return;
     if (_switchingMix || _busySounds.isNotEmpty) return;
     _switchingMix = true;
     _followRotation = false;
@@ -682,10 +674,8 @@ class _PlayerScreenState extends State<PlayerScreen> {
       builder: (sheetContext) => SleepTimerSheet(
         regularDuration: _audio.regularTimerDuration,
         regularFade: _audio.regularTimerFade,
-        preview: (duration, fade) => _audio.previewSleepPlan(
-          duration: duration,
-          fade: fade,
-        ),
+        preview: (duration, fade) =>
+            _audio.previewSleepPlan(duration: duration, fade: fade),
         onStart: (duration, fadeOut) async {
           await _audio.startSleepTimer(duration: duration, fadeOut: fadeOut);
           if (mounted) setState(() {});
@@ -738,39 +728,29 @@ class _PlayerScreenState extends State<PlayerScreen> {
         timerState: _audio.sleepTimerState,
         timerStates: _audio.sleepTimerStates,
         plannedTimer: _audio.previewSleepPlan(),
-        onPlayPause: widget.demoMode ? () {} : _togglePlayback,
-        onStop: widget.demoMode ? () {} : _stopPlayback,
-        onTimer: widget.demoMode ? () {} : _showTimer,
-        onOpenMixer: widget.demoMode ? () {} : _openMixer,
+        onPlayPause: _togglePlayback,
+        onStop: _stopPlayback,
+        onTimer: _showTimer,
+        onOpenMixer: _openMixer,
         onMasterVolumeChanged: _setMasterVolume,
       ),
       LibraryView(
         sounds: _sounds,
         selectedSounds: selected,
-        onToggleSound: widget.demoMode
-            ? (_) {}
-            : (sound) => unawaited(_toggleSound(sound)),
+        onToggleSound: (sound) => unawaited(_toggleSound(sound)),
         onImport: widget.demoMode ? null : _importSound,
       ),
       SavedMixesView(
         mixes: _savedMixes,
         sounds: _sounds,
-        onLoad: widget.demoMode
-            ? (_) {}
-            : (mix) => unawaited(_loadSavedMix(mix)),
+        onLoad: (mix) => unawaited(_loadSavedMix(mix)),
         onDelete: (mix) => unawaited(_deleteSavedMix(mix)),
-        onEdit: widget.demoMode
-            ? (_) {}
-            : (mix) => unawaited(_editSavedMix(mix)),
-        onRename: widget.demoMode
-            ? (_) {}
-            : (mix) => unawaited(_renameSavedMix(mix)),
-        onDuplicate: widget.demoMode
-            ? (_) {}
-            : (mix) => unawaited(_duplicateSavedMix(mix)),
+        onEdit: (mix) => unawaited(_editSavedMix(mix)),
+        onRename: (mix) => unawaited(_renameSavedMix(mix)),
+        onDuplicate: (mix) => unawaited(_duplicateSavedMix(mix)),
         onBrowse: () => setState(() => _activeTab = 1),
         rotationSummary: _rotationSummary,
-        onRotation: widget.demoMode ? () {} : _editRotation,
+        onRotation: _editRotation,
       ),
       AlarmsView(alarms: _wakeAlarms),
       const SettingsView(),
@@ -783,6 +763,24 @@ class _PlayerScreenState extends State<PlayerScreen> {
         fullScene: true,
         child: Column(
           children: [
+            if (widget.demoMode)
+              SafeArea(
+                bottom: false,
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+                  child: Text(
+                    switch (Localizations.localeOf(context).languageCode) {
+                      'nb' => 'Nettleserdemo: ingen lyd. Alarmer vises bare mens siden er åpen.',
+                      'fr' => 'Démo web : sans son. Les alarmes fonctionnent uniquement lorsque la page est ouverte.',
+                      'es' => 'Demo web: sin sonido. Las alarmas solo funcionan con la página abierta.',
+                      'de' => 'Webdemo: ohne Ton. Wecker funktionieren nur bei geöffneter Seite.',
+                      _ => 'Browser demo: no sound. Alarms work only while this page is open.',
+                    },
+                    textAlign: TextAlign.center,
+                    style: TextStyle(color: style.text, fontSize: 11),
+                  ),
+                ),
+              ),
             RingingAlarmBanner(alarms: _wakeAlarms),
             Expanded(
               child: IndexedStack(index: _activeTab, children: pages),

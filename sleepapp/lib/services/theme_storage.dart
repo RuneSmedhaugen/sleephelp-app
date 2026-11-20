@@ -1,3 +1,7 @@
+import 'package:flutter/foundation.dart' show kIsWeb;
+
+import 'browser_store.dart';
+
 import 'dart:io';
 
 import 'package:path/path.dart' as p;
@@ -14,9 +18,13 @@ class ThemeStorage {
   }
 
   static Future<RestStyle> load() async {
-    final file = await _file();
-    if (!await file.exists()) return RestStyle.all.first;
-    final id = (await file.readAsString()).trim();
+    String? id;
+    if (kIsWeb) {
+      id = browserRead("rest_theme");
+    } else {
+      final file = await _file();
+      if (await file.exists()) id = (await file.readAsString()).trim();
+    }
     return RestStyle.all.firstWhere(
       (style) => style.id == id,
       orElse: () => RestStyle.all.first,
@@ -26,6 +34,10 @@ class ThemeStorage {
   static Future<void> save(RestStyle style) {
     // Finish writes in tap order when the user tries several themes quickly.
     final write = _writeTail.then((_) async {
+      if (kIsWeb) {
+        browserWrite("rest_theme", style.id);
+        return;
+      }
       final file = await _file();
       final pending = File('${file.path}.tmp');
       await pending.writeAsString(style.id, flush: true);

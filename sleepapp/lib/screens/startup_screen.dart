@@ -11,6 +11,7 @@ import '../models/rest_style.dart';
 import '../models/sound.dart';
 import '../models/sound_mix.dart';
 import '../services/audio_service.dart';
+import '../services/demo_sleep_player.dart';
 import '../services/imported_sound_storage.dart';
 import '../services/language_preference.dart';
 import '../services/mix_rotation_storage.dart';
@@ -59,35 +60,18 @@ class _StartupScreenState extends State<StartupScreen>
   Future<_StartupData> _load() async {
     try {
       if (kIsWeb) {
-        final sounds = [
-          Sound(
-            file: 'demo/rain',
-            name: 'Rain',
-            icon: Icons.water_drop_rounded,
-            category: 'Water',
-          ),
-          Sound(
-            file: 'demo/forest',
-            name: 'Forest ambience',
-            icon: Icons.forest_rounded,
-            category: 'Nature',
-          ),
-        ];
+        final sounds =
+            (jsonDecode(await rootBundle.loadString('assets/sounds.json'))
+                    as List<dynamic>)
+                .map((item) => Sound.fromJson(item as Map<String, dynamic>))
+                .toList();
         await LanguagePreference.restore();
-        final audio = SleepAudioHandler(listenForAudioSessionEvents: false);
-        final previewMix = SoundMix(
-          id: 'rest-showcase-preview',
-          name: 'Evening rain',
-          sounds: sounds.take(2).map((sound) => sound.file).toList(),
-          volumes: {for (final sound in sounds.take(2)) sound.file: 0.7},
-          updatedAt: DateTime.now(),
+        await _restoreTheme();
+        final audio = SleepAudioHandler(
+          playerFactory: DemoSleepPlayer.new,
+          listenForAudioSessionEvents: false,
         );
-        return (
-          audio,
-          sounds,
-          [previewMix],
-          (const MixRotation(), previewMix.id),
-        );
+        return (audio, sounds, await _loadSavedMixes(), await _loadRotation());
       }
       final (audio, sounds, mixes, rotation, _, _) = await (
         initializeSleepAudio(),

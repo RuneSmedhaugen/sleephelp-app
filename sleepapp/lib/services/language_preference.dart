@@ -1,3 +1,7 @@
+import 'package:flutter/foundation.dart' show kIsWeb;
+
+import 'browser_store.dart';
+
 import 'dart:io';
 
 import 'package:material_ui/material_ui.dart';
@@ -17,9 +21,15 @@ class LanguagePreference {
 
   static Future<void> restore() async {
     try {
-      final file = await _file();
-      if (!await file.exists()) return;
-      final locale = Locale((await file.readAsString()).trim());
+      String? raw;
+      if (kIsWeb) {
+        raw = browserRead("rest_language");
+      } else {
+        final file = await _file();
+        if (await file.exists()) raw = await file.readAsString();
+      }
+      if (raw == null) return;
+      final locale = Locale(raw.trim());
       if (RestStrings.supportedLocales.contains(locale)) {
         selected.value = locale;
       }
@@ -31,6 +41,10 @@ class LanguagePreference {
   static Future<void> save(Locale? locale) {
     selected.value = locale;
     final write = _writeTail.then((_) async {
+      if (kIsWeb) {
+        browserWrite("rest_language", locale?.languageCode ?? "system");
+        return;
+      }
       final file = await _file();
       final pending = File('${file.path}.tmp');
       await pending.writeAsString(

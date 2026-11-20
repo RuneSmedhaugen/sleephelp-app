@@ -5,7 +5,7 @@ $pubspecPath = Join-Path $projectRoot 'pubspec.yaml'
 $originalPubspec = [System.IO.File]::ReadAllText($pubspecPath)
 $demoPubspec = [System.Text.RegularExpressions.Regex]::Replace(
     $originalPubspec,
-    '(?m)^    - assets/sounds(?:/|\.json).*(?:\r?\n|$)',
+    '(?m)^    - assets/sounds/.*(?:\r?\n|$)',
     ''
 )
 $baseHref = '/sleephelp-app/'
