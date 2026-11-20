@@ -1,0 +1,46 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>REST — Showcase demo</title>
+    <style>
+      :root { color-scheme: dark; font-family: Arial, sans-serif; }
+      * { box-sizing: border-box; }
+      body {
+        margin: 0; min-height: 100vh; display: grid; place-items: center;
+        background: #090b10; color: #e2deeb;
+      }
+      main {
+        width: min(100% - 32px, 620px); padding: 48px 36px 40px;
+        display: grid; justify-items: center; text-align: center;
+        border: 1px solid #79748d; border-radius: 28px;
+        background: radial-gradient(ellipse at 50% 0%, #242137 0%, #11131d 50%, #090b10 100%);
+      }
+      h1 { margin: 0; font: 300 42px/1.1 Arial, sans-serif; letter-spacing: .34em; padding-left: .34em; }
+      p { margin: 14px 0 26px; color: #bcb7c9; font: italic 22px Georgia, serif; }
+      img { display: block; width: min(78vw, 360px); height: auto; border-radius: 8px; }
+      .instructions { margin: 22px 0 8px; color: #d4d0dc; font-size: 17px; }
+      a { color: #c4b5fd; overflow-wrap: anywhere; font-size: 13px; }
+      small { margin-top: 18px; color: #9393a2; font-size: 12px; }
+      @media print {
+        @page { size: A4 portrait; margin: 15mm; }
+        :root { color-scheme: light; }
+        body { min-height: auto; background: white; color: #16151b; }
+        main { width: 100%; border-color: #bbb; background: white; }
+        p, .instructions, small { color: #444; }
+        a { color: #222; }
+      }
+    </style>
+  </head>
+  <body>
+    <main>
+      <h1>R.E.S.T.</h1>
+      <p>Find your quieter night.</p>
+      <img src="rest-demo-qr.png" alt="QR code linking to the REST browser demo">
+      <div class="instructions">Scan to explore the REST app demo</div>
+      <a href="https://runesmedhaugen.github.io/sleephelp-app/">https://runesmedhaugen.github.io/sleephelp-app/</a>
+      <small>Browser demo · Sound playback is disabled</small>
+    </main>
+  </body>
+</html>
