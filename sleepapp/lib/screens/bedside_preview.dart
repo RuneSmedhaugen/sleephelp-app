@@ -218,32 +218,69 @@ class _NightPainter extends CustomPainter {
         ).createShader(rect),
     );
     final phase = animation.value * math.pi * 2;
-    final moon = Offset(size.width * .75, size.height * .25);
+    final moon = Offset(
+      size.width * (.75 + .018 * math.sin(phase)),
+      size.height * (.25 + .015 * math.cos(phase)),
+    );
     final radius = math.min(size.width, size.height) * .085;
+    for (var layer = 0; layer < 3; layer++) {
+      final drift = math.sin(phase + layer * 1.5);
+      final center = Offset(
+        size.width * (.2 + layer * .31 + drift * .055),
+        size.height * (.36 + layer * .09 + math.cos(phase + layer) * .04),
+      );
+      final glowRadius = size.longestSide * (.35 + layer * .06);
+      canvas.drawCircle(
+        center,
+        glowRadius,
+        Paint()
+          ..shader = RadialGradient(
+            colors: [
+              [
+                const Color(0xff735caa),
+                const Color(0xff4f729a),
+                const Color(0xff9972a5),
+              ][layer].withValues(alpha: .045 + .014 * (1 + drift)),
+              Colors.transparent,
+            ],
+          ).createShader(Rect.fromCircle(center: center, radius: glowRadius)),
+      );
+    }
+    final glowRadius = radius * (3.1 + .3 * math.sin(phase));
     canvas.drawCircle(
       moon,
-      radius * 2.8,
+      glowRadius,
       Paint()
         ..shader = RadialGradient(
           colors: [
-            const Color(0xff9f8dca).withValues(alpha: .18),
+            const Color(0xff9f8dca)
+                .withValues(alpha: .16 + .035 * (1 + math.sin(phase))),
             Colors.transparent,
           ],
-        ).createShader(Rect.fromCircle(center: moon, radius: radius * 2.8)),
+        ).createShader(Rect.fromCircle(center: moon, radius: glowRadius)),
     );
-    canvas.drawCircle(
-      moon,
-      radius,
+    final moonShape = Path.combine(
+      PathOperation.difference,
+      Path()..addOval(Rect.fromCircle(center: moon, radius: radius)),
+      Path()..addOval(
+        Rect.fromCircle(
+          center: moon.translate(radius * .42, -radius * .24),
+          radius: radius * .9,
+        ),
+      ),
+    );
+    canvas.drawPath(
+      moonShape,
       Paint()..color = const Color(0xffb3a6d5).withValues(alpha: .42),
     );
-    canvas.drawCircle(
-      moon.translate(radius * .42, -radius * .24),
-      radius * .9,
-      Paint()..color = const Color(0xff131327),
-    );
     for (var i = 0; i < 35; i++) {
-      final x = ((i * 73 + 17) % 997) / 997 * size.width;
-      final y = ((i * 137 + 83) % 787) / 787 * size.height * .75;
+      final x =
+          (((i * 73 + 17) % 997) / 997 + .012 * math.sin(phase + i * .8)) *
+          size.width;
+      final y =
+          (((i * 137 + 83) % 787) / 787 * .75 +
+              .012 * math.cos(phase + i * 1.3)) *
+          size.height;
       final opacity = .12 + .15 * (1 + math.sin(phase + i * 2.1)) / 2;
       canvas.drawCircle(
         Offset(x, y),
@@ -259,7 +296,7 @@ class _NightPainter extends CustomPainter {
             math.sin(x / size.width * 4.2 + phase + layer * 1.2) *
                 size.height *
                 .025 +
-            math.sin(x / size.width * 8 - phase * .6) * size.height * .012;
+            math.sin(x / size.width * 8 - phase) * size.height * .012;
         path.lineTo(x, y);
       }
       path.lineTo(size.width, size.height);
