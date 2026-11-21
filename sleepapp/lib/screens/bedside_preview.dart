@@ -31,7 +31,7 @@ class _BedsidePreviewState extends State<BedsidePreview>
     with SingleTickerProviderStateMixin {
   late final AnimationController _animation = AnimationController(
     vsync: this,
-    duration: const Duration(seconds: 32),
+    duration: const Duration(seconds: 28),
   )..repeat();
   Timer? _clock;
   DateTime _now = DateTime.now();
@@ -205,112 +205,123 @@ class _BedsidePreviewState extends State<BedsidePreview>
 class _NightPainter extends CustomPainter {
   _NightPainter(this.animation) : super(repaint: animation);
   final Animation<double> animation;
+
   @override
   void paint(Canvas canvas, Size size) {
-    final rect = Offset.zero & size;
+    if (size.isEmpty) return;
+    final bounds = Offset.zero & size;
     canvas.drawRect(
-      rect,
+      bounds,
       Paint()
         ..shader = const LinearGradient(
-          begin: Alignment.topCenter,
-          end: Alignment.bottomCenter,
-          colors: [Color(0xff0a0d1e), Color(0xff17142d), Color(0xff101722)],
-        ).createShader(rect),
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: [Color(0xff090c1b), Color(0xff1c1736), Color(0xff10172d)],
+        ).createShader(bounds),
     );
+
     final phase = animation.value * math.pi * 2;
-    final moon = Offset(
-      size.width * (.75 + .018 * math.sin(phase)),
-      size.height * (.25 + .015 * math.cos(phase)),
-    );
-    final radius = math.min(size.width, size.height) * .085;
-    for (var layer = 0; layer < 3; layer++) {
-      final drift = math.sin(phase + layer * 1.5);
+    final scale = size.shortestSide;
+    final colors = [
+      const Color(0xff9372cb),
+      const Color(0xff728ec1),
+      const Color(0xffb37eac),
+      const Color(0xff7971c0),
+      const Color(0xff6b9fab),
+    ];
+    // Large translucent forms continuously stretch, overlap and travel across
+    // the canvas. Integer phase multiples make the loop meet seamlessly.
+    for (var i = 0; i < colors.length; i++) {
+      final angle = phase + i * math.pi * 2 / colors.length;
       final center = Offset(
-        size.width * (.2 + layer * .31 + drift * .055),
-        size.height * (.36 + layer * .09 + math.cos(phase + layer) * .04),
+        size.width * (.5 + .39 * math.sin(angle)),
+        size.height * (.5 + .36 * math.cos(angle + i * .7)),
       );
-      final glowRadius = size.longestSide * (.35 + layer * .06);
-      canvas.drawCircle(
-        center,
-        glowRadius,
+      final width = scale * (.31 + .08 * math.sin(phase * 2 + i));
+      final height = scale * (.47 + .12 * math.cos(phase + i * 1.3));
+      canvas.save();
+      canvas.translate(center.dx, center.dy);
+      canvas.rotate(.45 * math.sin(phase + i));
+      final glow = Rect.fromCenter(
+        center: Offset.zero,
+        width: width * 3.7,
+        height: height * 3.7,
+      );
+      canvas.drawOval(
+        glow,
         Paint()
           ..shader = RadialGradient(
             colors: [
-              [
-                const Color(0xff735caa),
-                const Color(0xff4f729a),
-                const Color(0xff9972a5),
-              ][layer].withValues(alpha: .045 + .014 * (1 + drift)),
+              colors[i].withValues(alpha: .15),
+              colors[i].withValues(alpha: .055),
               Colors.transparent,
             ],
-          ).createShader(Rect.fromCircle(center: center, radius: glowRadius)),
+            stops: const [0, .48, 1],
+          ).createShader(glow),
       );
+      for (var layer = 2; layer >= 0; layer--) {
+        final multiplier = 1.0 + layer * .14;
+        final path = Path();
+        for (var step = 0; step <= 96; step++) {
+          final theta = step * math.pi * 2 / 96;
+          final ripple =
+              1 +
+              .14 * math.sin(theta * 3 + phase + i) +
+              .08 * math.cos(theta * 2 - phase * 2 + i);
+          final x = math.cos(theta) * width * multiplier * ripple;
+          final y = math.sin(theta) * height * multiplier * ripple;
+          if (step == 0) {
+            path.moveTo(x, y);
+          } else {
+            path.lineTo(x, y);
+          }
+        }
+        path.close();
+        final shapeBounds = Rect.fromCenter(
+          center: Offset.zero,
+          width: width * multiplier * 2.8,
+          height: height * multiplier * 2.8,
+        );
+        canvas.drawPath(
+          path,
+          Paint()
+            ..shader = RadialGradient(
+              center: const Alignment(-.3, -.4),
+              radius: .85,
+              colors: [
+                colors[i].withValues(alpha: .19 - layer * .035),
+                colors[i].withValues(alpha: .025),
+                Colors.transparent,
+              ],
+              stops: const [0, .7, 1],
+            ).createShader(shapeBounds),
+        );
+        canvas.drawPath(
+          path,
+          Paint()
+            ..style = PaintingStyle.stroke
+            ..strokeWidth = 1.1
+            ..color = colors[i].withValues(alpha: .12 - layer * .025),
+        );
+      }
+      canvas.restore();
     }
-    final glowRadius = radius * (3.1 + .3 * math.sin(phase));
-    canvas.drawCircle(
-      moon,
-      glowRadius,
+    // A soft reading area keeps the clock legible as the forms pass behind it.
+    final shade = Rect.fromCenter(
+      center: size.center(Offset.zero),
+      width: size.width * .9,
+      height: size.height * .8,
+    );
+    canvas.drawRect(
+      bounds,
       Paint()
         ..shader = RadialGradient(
           colors: [
-            const Color(0xff9f8dca)
-                .withValues(alpha: .16 + .035 * (1 + math.sin(phase))),
+            const Color(0xff0c0d20).withValues(alpha: .4),
             Colors.transparent,
           ],
-        ).createShader(Rect.fromCircle(center: moon, radius: glowRadius)),
+        ).createShader(shade),
     );
-    final moonShape = Path.combine(
-      PathOperation.difference,
-      Path()..addOval(Rect.fromCircle(center: moon, radius: radius)),
-      Path()..addOval(
-        Rect.fromCircle(
-          center: moon.translate(radius * .42, -radius * .24),
-          radius: radius * .9,
-        ),
-      ),
-    );
-    canvas.drawPath(
-      moonShape,
-      Paint()..color = const Color(0xffb3a6d5).withValues(alpha: .42),
-    );
-    for (var i = 0; i < 35; i++) {
-      final x =
-          (((i * 73 + 17) % 997) / 997 + .012 * math.sin(phase + i * .8)) *
-          size.width;
-      final y =
-          (((i * 137 + 83) % 787) / 787 * .75 +
-              .012 * math.cos(phase + i * 1.3)) *
-          size.height;
-      final opacity = .12 + .15 * (1 + math.sin(phase + i * 2.1)) / 2;
-      canvas.drawCircle(
-        Offset(x, y),
-        i % 8 == 0 ? 1.3 : .7,
-        Paint()..color = const Color(0xffc6b9ed).withValues(alpha: opacity),
-      );
-    }
-    for (var layer = 0; layer < 3; layer++) {
-      final path = Path()..moveTo(0, size.height);
-      for (var x = 0.0; x <= size.width + 4; x += 4) {
-        final y =
-            size.height * (.73 + layer * .075) +
-            math.sin(x / size.width * 4.2 + phase + layer * 1.2) *
-                size.height *
-                .025 +
-            math.sin(x / size.width * 8 - phase) * size.height * .012;
-        path.lineTo(x, y);
-      }
-      path.lineTo(size.width, size.height);
-      path.close();
-      canvas.drawPath(
-        path,
-        Paint()
-          ..color = [
-            const Color(0xff6d5b98),
-            const Color(0xff5b6e91),
-            const Color(0xff4c587d),
-          ][layer].withValues(alpha: .10),
-      );
-    }
   }
 
   @override
