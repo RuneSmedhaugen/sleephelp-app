@@ -23,6 +23,7 @@ import '../widgets/mix_rotation_sheet.dart';
 import 'library_view.dart';
 import 'alarms_view.dart';
 import 'saved_mixes_view.dart';
+import 'bedside_preview.dart';
 import 'settings_view.dart';
 import 'sleep_home_view.dart';
 
@@ -754,6 +755,15 @@ class _PlayerScreenState extends State<PlayerScreen> {
       ),
       AlarmsView(alarms: _wakeAlarms),
       const SettingsView(),
+      if (widget.demoMode)
+        BedsidePreview(
+          visible: _activeTab == 5,
+          isPlaying: _isPlaying,
+          onPlayPause: _togglePlayback,
+          onStop: _stopPlayback,
+          mixName: _savedMix(_loadedMixId)?.name,
+          alarmAt: _wakeAlarms.nextWake?.ringsAt,
+        ),
     ];
 
     return Scaffold(
@@ -767,7 +777,10 @@ class _PlayerScreenState extends State<PlayerScreen> {
               SafeArea(
                 bottom: false,
                 child: Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 12,
+                    vertical: 4,
+                  ),
                   child: Text(
                     switch (Localizations.localeOf(context).languageCode) {
                       'nb' => 'Nettleserdemo: ingen lyd. Alarmer vises bare mens siden er åpen.',
@@ -790,6 +803,9 @@ class _PlayerScreenState extends State<PlayerScreen> {
       ),
       bottomNavigationBar: NavigationBar(
         selectedIndex: _activeTab,
+        labelBehavior: widget.demoMode
+            ? NavigationDestinationLabelBehavior.onlyShowSelected
+            : NavigationDestinationLabelBehavior.alwaysShow,
         onDestinationSelected: (index) => setState(() => _activeTab = index),
         destinations: [
           NavigationDestination(
@@ -817,6 +833,12 @@ class _PlayerScreenState extends State<PlayerScreen> {
             selectedIcon: Icon(Icons.settings_rounded),
             label: context.t(L.settings),
           ),
+          if (widget.demoMode)
+            NavigationDestination(
+              icon: const Icon(Icons.bedtime_outlined),
+              selectedIcon: const Icon(Icons.bedtime_rounded),
+              label: context.t(L.bedsideView),
+            ),
         ],
       ),
     );
