@@ -16,16 +16,16 @@ class RestIntro extends StatefulWidget {
 }
 
 class _RestIntroState extends State<RestIntro> {
-  static const _title = 'R.E.S.T';
+  static const _title = '.E.S.T';
   static const _subtitle = 'Relaxing Environment, Sounds & Timer';
+  ui.Image? _logoMark;
 
   final TextPainter _wordmark = TextPainter(
     text: const TextSpan(
       text: _title,
       style: TextStyle(
         color: Colors.white,
-        fontFamily: 'Space Grotesk',
-        fontVariations: [ui.FontVariation('wght', 640)],
+        fontFamily: 'REST Ribbon',
         fontSize: 96,
         letterSpacing: 8,
       ),
@@ -33,13 +33,36 @@ class _RestIntroState extends State<RestIntro> {
     textDirection: TextDirection.ltr,
   )..layout();
 
+  @override
+  void initState() {
+    super.initState();
+    _loadLogoMark();
+  }
+
+  Future<void> _loadLogoMark() async {
+    try {
+      final data = await rootBundle.load(
+        'design/logo/rest-logo-transparent.png',
+      );
+      final codec = await ui.instantiateImageCodec(data.buffer.asUint8List());
+      final frame = await codec.getNextFrame();
+      codec.dispose();
+      if (!mounted) {
+        frame.image.dispose();
+        return;
+      }
+      setState(() => _logoMark = frame.image);
+    } catch (_) {
+      // The animated wordmark can still show its lettering if the mark fails.
+    }
+  }
+
   final TextPainter _fullName = TextPainter(
     text: const TextSpan(
       text: _subtitle,
       style: TextStyle(
         color: Color(0xFFBCC4D6),
-        fontFamily: 'Space Grotesk',
-        fontVariations: [ui.FontVariation('wght', 500)],
+        fontFamily: 'REST Ribbon',
         fontSize: 19,
         letterSpacing: 0.9,
       ),
@@ -51,6 +74,7 @@ class _RestIntroState extends State<RestIntro> {
   void dispose() {
     _wordmark.dispose();
     _fullName.dispose();
+    _logoMark?.dispose();
     super.dispose();
   }
 
@@ -73,6 +97,7 @@ class _RestIntroState extends State<RestIntro> {
                 widget.progress,
                 _wordmark,
                 _fullName,
+                _logoMark,
                 reduceMotion,
               ),
               willChange: !reduceMotion,
@@ -89,13 +114,17 @@ class _RestIntroPainter extends CustomPainter {
     this.progress,
     this.wordmark,
     this.fullName,
+    this.logoMark,
     this.reduceMotion,
   ) : super(repaint: reduceMotion ? null : progress);
 
   final Animation<double> progress;
   final TextPainter wordmark;
   final TextPainter fullName;
+  final ui.Image? logoMark;
   final bool reduceMotion;
+
+  static const Rect _logoSource = Rect.fromLTRB(215, 125, 1180, 910);
 
   static final List<_Star> _stars = _makeStars();
 
@@ -156,8 +185,13 @@ class _RestIntroPainter extends CustomPainter {
 
     final opacity = _reveal(_phase(time, 0.035, 1));
     if (opacity > 0) {
-      final width = math.min(field * 0.80, 440.0) * (0.80 + approach * 0.20);
-      final scale = width / math.max(wordmark.width, fullName.width);
+      final markHeight = wordmark.height * 0.84;
+      final markWidth = logoMark == null
+          ? wordmark.height * 0.65
+          : markHeight * (_logoSource.width / _logoSource.height);
+      final brandWidth = markWidth + 10 + wordmark.width;
+      final width = math.min(field * 0.80, 480.0) * (0.80 + approach * 0.20);
+      final scale = width / math.max(brandWidth, fullName.width);
       _paintBrand(canvas, center, scale, opacity, time);
     }
   }
@@ -228,9 +262,17 @@ class _RestIntroPainter extends CustomPainter {
     double opacity,
     double time,
   ) {
-    final bounds = Offset.zero & wordmark.size;
+    final markHeight = wordmark.height * 0.84;
+    final markWidth = logoMark == null
+        ? wordmark.height * 0.65
+        : markHeight * (_logoSource.width / _logoSource.height);
+    const markGap = 10.0;
+    final brandWidth = markWidth + markGap + wordmark.width;
+    final brandSize = Size(brandWidth, wordmark.height);
+    final bounds = Offset.zero & brandSize;
+    final textOffset = Offset(markWidth + markGap, 0);
     final subtitleOffset = Offset(
-      (wordmark.width - fullName.width) / 2,
+      (brandWidth - fullName.width) / 2,
       wordmark.height + 3,
     );
     final subtitleBounds = subtitleOffset & fullName.size;
@@ -247,14 +289,45 @@ class _RestIntroPainter extends CustomPainter {
       bounds,
       Paint()..color = Colors.white.withValues(alpha: opacity),
     );
-    wordmark.paint(canvas, Offset.zero);
+    if (logoMark case final mark?) {
+      final markRect = Rect.fromLTWH(
+        0,
+        (wordmark.height - markHeight) / 2,
+        markWidth,
+        markHeight,
+      );
+      canvas.drawImageRect(
+        mark,
+        _logoSource,
+        markRect,
+        Paint()..filterQuality = FilterQuality.high,
+      );
+    } else {
+      final fallback = TextPainter(
+        text: const TextSpan(
+          text: 'R',
+          style: TextStyle(
+            color: Color(0xFFC9D2E2),
+            fontFamily: 'REST Ribbon',
+            fontSize: 96,
+          ),
+        ),
+        textDirection: TextDirection.ltr,
+      )..layout();
+      fallback.paint(
+        canvas,
+        Offset(0, (wordmark.height - fallback.height) / 2),
+      );
+      fallback.dispose();
+    }
+    wordmark.paint(canvas, textOffset);
     canvas.drawRect(
-      bounds,
+      Rect.fromLTWH(textOffset.dx, 0, wordmark.width, wordmark.height),
       Paint()
         ..blendMode = BlendMode.srcIn
         ..shader = ui.Gradient.linear(
-          Offset(0, baseline - 70),
-          Offset(0, baseline),
+          Offset(textOffset.dx, baseline - 70),
+          Offset(textOffset.dx, baseline),
           const [
             Color(0xFFB1BDCE),
             Color(0xFFF4F8FF),
@@ -268,9 +341,9 @@ class _RestIntroPainter extends CustomPainter {
 
     if (time > 0.68 && time < 1) {
       final sweep = Curves.easeInOutSine.transform(_phase(time, 0.68, 1));
-      final x = ui.lerpDouble(-62, bounds.width + 62, sweep)!;
+      final x = ui.lerpDouble(textOffset.dx - 62, bounds.width + 62, sweep)!;
       canvas.drawRect(
-        bounds,
+        Rect.fromLTWH(textOffset.dx, 0, wordmark.width, wordmark.height),
         Paint()
           ..blendMode = BlendMode.srcATop
           ..shader = ui.Gradient.linear(
@@ -312,6 +385,7 @@ class _RestIntroPainter extends CustomPainter {
       oldDelegate.progress != progress ||
       oldDelegate.wordmark != wordmark ||
       oldDelegate.fullName != fullName ||
+      oldDelegate.logoMark != logoMark ||
       oldDelegate.reduceMotion != reduceMotion;
 }
 

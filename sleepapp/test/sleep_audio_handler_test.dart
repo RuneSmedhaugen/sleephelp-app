@@ -29,6 +29,26 @@ void main() {
     handlers.clear();
   });
 
+  test('existing fire mix loads the new campfire recording', () async {
+    final player = FakeSleepPlayer();
+    final handler = createHandler(player);
+    await handler.addSound('fire.mp3');
+    expect(handler.selectedSounds, {'fire.mp3'});
+    expect(player.loadedAsset, 'assets/sounds/campfire-glaneur.ogg');
+  });
+
+  test('saved review campfire maps to the existing fire sound', () {
+    final mix = SoundMix.fromJson({
+      'id': '1',
+      'name': 'Campfire',
+      'sounds': ['campfire-glaneur.ogg'],
+      'volumes': {'campfire-glaneur.ogg': 0.6},
+      'updatedAt': DateTime(2026).toIso8601String(),
+    });
+    expect(mix.sounds, ['fire.mp3']);
+    expect(mix.volumes['fire.mp3'], 0.6);
+  });
+
   test(
     'mixes sound and master volume while play returns for looping audio',
     () async {

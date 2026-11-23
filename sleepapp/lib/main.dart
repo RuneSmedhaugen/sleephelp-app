@@ -32,7 +32,7 @@ class SleepApp extends StatelessWidget {
         ],
         debugShowCheckedModeBanner: false,
         theme: ThemeData(
-          fontFamily: 'Nunito',
+          fontFamily: 'REST Ribbon',
           colorScheme:
               ColorScheme.fromSeed(
                 seedColor: style.primary,

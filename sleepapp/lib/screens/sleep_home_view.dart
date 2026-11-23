@@ -252,35 +252,47 @@ class _TopGreeting extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final style = RestStyle.of(context);
     return Column(
       children: [
-        Text(
-          'R.E.S.T.',
-          textAlign: TextAlign.center,
-          style: TextStyle(
-            color: style.text,
-            fontFamily: 'Space Grotesk',
-            fontSize: 34,
-            letterSpacing: 6,
-            fontWeight: FontWeight.w300,
-            shadows: [
-              Shadow(
-                color: style.primary.withValues(alpha: 0.10),
-                blurRadius: 18,
+        FittedBox(
+          fit: BoxFit.scaleDown,
+          child: ShaderMask(
+            blendMode: BlendMode.srcIn,
+            shaderCallback: (bounds) => const LinearGradient(
+              colors: [Color(0xFF4BF1DD), Color(0xFF5E9BFF), Color(0xFFC36AFF)],
+            ).createShader(bounds),
+            child: const Text(
+              'R.E.S.T',
+              textAlign: TextAlign.center,
+              maxLines: 1,
+              softWrap: false,
+              style: TextStyle(
+                color: Colors.white,
+                fontFamily: 'REST Ribbon',
+                fontSize: 46,
+                letterSpacing: 7,
+                fontWeight: FontWeight.w400,
+                shadows: [
+                  Shadow(color: Color(0xCC00E8EF), blurRadius: 16),
+                  Shadow(color: Color(0x88705BFF), blurRadius: 30),
+                ],
               ),
-            ],
+            ),
           ),
         ),
         const SizedBox(height: 8),
         Text(
           context.t(L.settleIn),
           textAlign: TextAlign.center,
-          style: TextStyle(
-            color: style.text.withValues(alpha: 0.88),
-            fontFamily: 'Cormorant Garamond',
+          style: const TextStyle(
+            color: Color(0xFFD4C3FF),
+            fontFamily: 'REST Ribbon',
             fontStyle: FontStyle.italic,
             fontSize: 25,
+            shadows: [
+              Shadow(color: Color(0xA86645FF), blurRadius: 16),
+              Shadow(color: Color(0x5549DCE5), blurRadius: 26),
+            ],
           ),
         ),
       ],

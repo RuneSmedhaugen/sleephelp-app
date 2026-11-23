@@ -32,16 +32,26 @@ class SoundMix {
     timer: clearTimer ? null : timer ?? this.timer,
   );
 
-  factory SoundMix.fromJson(Map<String, dynamic> json) => SoundMix(
-    id: json['id'] as String,
-    name: json['name'] as String,
-    sounds: List<String>.from(json['sounds'] as List<dynamic>),
-    volumes: (json['volumes'] as Map<String, dynamic>).map(
+  factory SoundMix.fromJson(Map<String, dynamic> json) {
+    final sounds = List<String>.from(json['sounds'] as List<dynamic>);
+    final volumes = (json['volumes'] as Map<String, dynamic>).map(
       (key, value) => MapEntry(key, (value as num).toDouble()),
-    ),
-    updatedAt: DateTime.parse(json['updatedAt'] as String),
-    timer: MixTimerSettings.tryParse(json['timer']),
-  );
+    );
+    // The review copy is now the standard fire sound.
+    if (sounds.remove('campfire-glaneur.ogg')) {
+      if (!sounds.contains('fire.mp3')) sounds.add('fire.mp3');
+      final oldVolume = volumes.remove('campfire-glaneur.ogg');
+      if (oldVolume != null) volumes.putIfAbsent('fire.mp3', () => oldVolume);
+    }
+    return SoundMix(
+      id: json['id'] as String,
+      name: json['name'] as String,
+      sounds: sounds,
+      volumes: volumes,
+      updatedAt: DateTime.parse(json['updatedAt'] as String),
+      timer: MixTimerSettings.tryParse(json['timer']),
+    );
+  }
 
   Map<String, dynamic> toJson() => {
     'id': id,

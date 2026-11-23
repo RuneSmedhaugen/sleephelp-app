@@ -58,6 +58,40 @@ class SettingsView extends StatelessWidget {
               ),
             ),
           ),
+          Card(
+            child: ListTile(
+              leading: const Icon(Icons.library_music_outlined),
+              title: Text(switch (Localizations.localeOf(context)
+                  .languageCode) {
+                'nb' => 'Lydkreditering',
+                'fr' => 'Crédits des sons',
+                'es' => 'Créditos de sonido',
+                'de' => 'Soundnachweise',
+                _ => 'Sound credits',
+              }),
+              trailing: const Icon(Icons.chevron_right_rounded),
+              onTap: () => showDialog<void>(
+                context: context,
+                builder: (context) => AlertDialog(
+                  title: const Text('Sound credits'),
+                  content: const SingleChildScrollView(
+                    child: SelectableText(
+                      'Little campfire: “Little fire.ogg” by Glaneur de sons, '
+                      'via Wikimedia Commons. CC BY 3.0. No changes.\n\n'
+                      'https://commons.wikimedia.org/wiki/File:Campfire_sound_ambience.ogg\n'
+                      'https://creativecommons.org/licenses/by/3.0/',
+                    ),
+                  ),
+                  actions: [
+                    TextButton(
+                      onPressed: () => Navigator.pop(context),
+                      child: Text(context.t(L.done)),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ),
         ],
       ),
     );

@@ -84,7 +84,7 @@ class _BedsidePreviewState extends State<BedsidePreview>
                         'R.E.S.T.',
                         style: TextStyle(
                           color: const Color(0xffb8aadf).withValues(alpha: .7),
-                          fontFamily: 'Space Grotesk',
+                          fontFamily: 'REST Ribbon',
                           fontSize: 12,
                           letterSpacing: 4,
                         ),
@@ -98,7 +98,7 @@ class _BedsidePreviewState extends State<BedsidePreview>
                           style: TextStyle(
                             color: const Color(0xffd5cbe9)
                                 .withValues(alpha: .88),
-                            fontFamily: 'Nunito',
+                            fontFamily: 'REST Ribbon',
                             fontSize: clockSize,
                             fontWeight: FontWeight.w300,
                             letterSpacing: -2,

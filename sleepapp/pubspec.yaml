@@ -21,6 +21,7 @@ dependencies:
   web: ^1.1.1
 
   material_ui: any
+  google_mobile_ads: ^9.2.0
 dev_dependencies:
   flutter_test:
     sdk: flutter
@@ -32,11 +33,15 @@ flutter:
   assets:
     - assets/sounds/
     - assets/sounds.json
+    - design/logo/rest-logo-transparent.png
     - assets/fonts/SpaceGrotesk-OFL.txt
     - assets/fonts/CormorantGaramond-OFL.txt
     - assets/fonts/Nunito-OFL.txt
 
   fonts:
+    - family: REST Ribbon
+      fonts:
+        - asset: assets/fonts/RESTRibbon-Regular.ttf
     - family: Nunito
       fonts:
         - asset: assets/fonts/Nunito-Variable.ttf

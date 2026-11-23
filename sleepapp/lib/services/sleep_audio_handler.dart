@@ -150,7 +150,9 @@ class SleepAudioHandler extends BaseAudioHandler {
           final player = _playerFactory();
           try {
             if (localPath == null) {
-              await player.loadLoopedAsset('assets/sounds/$file');
+              // Keep the original sound ID so existing saved mixes still load.
+              final asset = file == 'fire.mp3' ? 'campfire-glaneur.ogg' : file;
+              await player.loadLoopedAsset('assets/sounds/$asset');
             } else {
               await player.loadLoopedFile(localPath);
             }

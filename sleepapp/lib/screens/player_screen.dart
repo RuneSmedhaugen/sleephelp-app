@@ -20,6 +20,8 @@ import '../widgets/rest_artwork.dart';
 import '../widgets/mix_name_dialog.dart';
 import '../widgets/mix_editor_sheet.dart';
 import '../widgets/mix_rotation_sheet.dart';
+import '../widgets/sounds_test_banner_stub.dart'
+    if (dart.library.io) '../widgets/sounds_test_banner.dart';
 import 'library_view.dart';
 import 'alarms_view.dart';
 import 'saved_mixes_view.dart';
@@ -116,6 +118,9 @@ class _PlayerScreenState extends State<PlayerScreen> {
       if (sessionEnded) unawaited(_refreshDefaultMix());
     });
     _lifecycle = AppLifecycleListener(
+      onStateChange: (_) {
+        if (mounted && SoundsTestBanner.enabled) setState(() {});
+      },
       onResume: () {
         _onCalendarCheck();
         _wakeAlarms.resume();
@@ -718,6 +723,19 @@ class _PlayerScreenState extends State<PlayerScreen> {
   Widget build(BuildContext context) {
     final style = RestStyle.of(context);
     final selected = _audio.selectedSounds;
+    final showTestBanner =
+        SoundsTestBanner.enabled &&
+        !widget.demoMode &&
+        _activeTab == 1 &&
+        !_audio.hasPlaybackSession &&
+        !_isPlaying &&
+        _wakeAlarms.ready &&
+        _wakeAlarms.ringingId == null &&
+        _lifecycle.binding.lifecycleState == AppLifecycleState.resumed &&
+        ModalRoute.isCurrentOf(context) == true &&
+        MediaQuery.viewInsetsOf(context).bottom == 0 &&
+        MediaQuery.sizeOf(context).width >= 344 &&
+        MediaQuery.sizeOf(context).height >= 480;
     final pages = [
       SleepHomeView(
         selectedSoundCount: selected.length,
@@ -798,6 +816,7 @@ class _PlayerScreenState extends State<PlayerScreen> {
             Expanded(
               child: IndexedStack(index: _activeTab, children: pages),
             ),
+            if (showTestBanner) const SoundsTestBanner(),
           ],
         ),
       ),
