@@ -327,13 +327,13 @@ class _RestIntroPainter extends CustomPainter {
         ..blendMode = BlendMode.srcIn
         ..shader = ui.Gradient.linear(
           Offset(textOffset.dx, baseline - 70),
-          Offset(textOffset.dx, baseline),
+          Offset(textOffset.dx + wordmark.width, baseline),
           const [
-            Color(0xFFB1BDCE),
-            Color(0xFFF4F8FF),
-            Color(0xFF8B9AAF),
-            Color(0xFFCDD7E5),
-            Color(0xFF9EACC1),
+            Color(0xFFFF4D9A),
+            Color(0xFFFF7B52),
+            Color(0xFF73F4D2),
+            Color(0xFF69B8FF),
+            Color(0xFFB183FF),
           ],
           const [0, 0.25, 0.52, 0.80, 1],
         ),

@@ -1,7 +1,7 @@
 import 'package:material_ui/material_ui.dart';
 
-class SoundsTestBanner extends StatelessWidget {
-  const SoundsTestBanner({super.key});
+class TestAdBanner extends StatelessWidget {
+  const TestAdBanner({super.key});
 
   static const enabled = false;
 

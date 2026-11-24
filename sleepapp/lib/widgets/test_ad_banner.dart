@@ -6,8 +6,8 @@ import 'package:material_ui/material_ui.dart';
 
 import '../models/rest_style.dart';
 
-class SoundsTestBanner extends StatefulWidget {
-  const SoundsTestBanner({super.key});
+class TestAdBanner extends StatefulWidget {
+  const TestAdBanner({super.key});
 
   static bool get enabled =>
       kDebugMode &&
@@ -16,10 +16,10 @@ class SoundsTestBanner extends StatefulWidget {
       const bool.fromEnvironment('REST_TEST_BANNERS');
 
   @override
-  State<SoundsTestBanner> createState() => _SoundsTestBannerState();
+  State<TestAdBanner> createState() => _TestAdBannerState();
 }
 
-class _SoundsTestBannerState extends State<SoundsTestBanner> {
+class _TestAdBannerState extends State<TestAdBanner> {
   static const _size = AdSize.banner;
   static const _testUnitId = 'ca-app-pub-3940256099942544/6300978111';
   static Future<void>? _initialization;

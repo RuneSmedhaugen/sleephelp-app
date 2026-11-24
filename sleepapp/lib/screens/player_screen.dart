@@ -20,14 +20,28 @@ import '../widgets/rest_artwork.dart';
 import '../widgets/mix_name_dialog.dart';
 import '../widgets/mix_editor_sheet.dart';
 import '../widgets/mix_rotation_sheet.dart';
-import '../widgets/sounds_test_banner_stub.dart'
-    if (dart.library.io) '../widgets/sounds_test_banner.dart';
+import '../widgets/test_ad_banner_stub.dart'
+    if (dart.library.io) '../widgets/test_ad_banner.dart';
 import 'library_view.dart';
 import 'alarms_view.dart';
 import 'saved_mixes_view.dart';
 import 'bedside_preview.dart';
 import 'settings_view.dart';
 import 'sleep_home_view.dart';
+
+enum _PlayerTab {
+  tonight,
+  sounds,
+  saved,
+  alarms,
+  settings,
+  bedside;
+
+  bool get allowsBanner => switch (this) {
+    sounds || saved || alarms || settings => true,
+    tonight || bedside => false,
+  };
+}
 
 class PlayerScreen extends StatefulWidget {
   const PlayerScreen({
@@ -72,7 +86,7 @@ class _PlayerScreenState extends State<PlayerScreen> {
   bool _hadPlaybackSession = false;
   int? _lastAlarmRing;
   StreamSubscription<PlaybackState>? _playbackSubscription;
-  int _activeTab = 0;
+  _PlayerTab _activeTab = _PlayerTab.tonight;
   bool _isPlaying = false;
 
   SleepAudioHandler get _audio => widget.audio;
@@ -119,7 +133,7 @@ class _PlayerScreenState extends State<PlayerScreen> {
     });
     _lifecycle = AppLifecycleListener(
       onStateChange: (_) {
-        if (mounted && SoundsTestBanner.enabled) setState(() {});
+        if (mounted && TestAdBanner.enabled) setState(() {});
       },
       onResume: () {
         _onCalendarCheck();
@@ -627,7 +641,7 @@ class _PlayerScreenState extends State<PlayerScreen> {
         _showLocalized(L.mixNoSounds);
         return;
       }
-      if (mounted) setState(() => _activeTab = 0);
+      if (mounted) setState(() => _activeTab = _PlayerTab.tonight);
       _showLocalized(L.mixLoaded, [mix.name]);
     } catch (error) {
       debugPrint('Could not load saved mix: $error');
@@ -724,11 +738,9 @@ class _PlayerScreenState extends State<PlayerScreen> {
     final style = RestStyle.of(context);
     final selected = _audio.selectedSounds;
     final showTestBanner =
-        SoundsTestBanner.enabled &&
+        TestAdBanner.enabled &&
         !widget.demoMode &&
-        _activeTab == 1 &&
-        !_audio.hasPlaybackSession &&
-        !_isPlaying &&
+        _activeTab.allowsBanner &&
         _wakeAlarms.ready &&
         _wakeAlarms.ringingId == null &&
         _lifecycle.binding.lifecycleState == AppLifecycleState.resumed &&
@@ -767,7 +779,7 @@ class _PlayerScreenState extends State<PlayerScreen> {
         onEdit: (mix) => unawaited(_editSavedMix(mix)),
         onRename: (mix) => unawaited(_renameSavedMix(mix)),
         onDuplicate: (mix) => unawaited(_duplicateSavedMix(mix)),
-        onBrowse: () => setState(() => _activeTab = 1),
+        onBrowse: () => setState(() => _activeTab = _PlayerTab.sounds),
         rotationSummary: _rotationSummary,
         onRotation: _editRotation,
       ),
@@ -775,7 +787,7 @@ class _PlayerScreenState extends State<PlayerScreen> {
       const SettingsView(),
       if (widget.demoMode)
         BedsidePreview(
-          visible: _activeTab == 5,
+          visible: _activeTab == _PlayerTab.bedside,
           isPlaying: _isPlaying,
           onPlayPause: _togglePlayback,
           onStop: _stopPlayback,
@@ -814,18 +826,19 @@ class _PlayerScreenState extends State<PlayerScreen> {
               ),
             RingingAlarmBanner(alarms: _wakeAlarms),
             Expanded(
-              child: IndexedStack(index: _activeTab, children: pages),
+              child: IndexedStack(index: _activeTab.index, children: pages),
             ),
-            if (showTestBanner) const SoundsTestBanner(),
+            if (showTestBanner) const TestAdBanner(),
           ],
         ),
       ),
       bottomNavigationBar: NavigationBar(
-        selectedIndex: _activeTab,
+        selectedIndex: _activeTab.index,
         labelBehavior: widget.demoMode
             ? NavigationDestinationLabelBehavior.onlyShowSelected
             : NavigationDestinationLabelBehavior.alwaysShow,
-        onDestinationSelected: (index) => setState(() => _activeTab = index),
+        onDestinationSelected: (index) =>
+            setState(() => _activeTab = _PlayerTab.values[index]),
         destinations: [
           NavigationDestination(
             icon: Icon(Icons.nightlight_outlined),
