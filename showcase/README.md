@@ -1,4 +1,12 @@
-To open the REST demo, double-click **Open-REST-demo.html** in this folder.
+# Try the REST demo
 
-On a phone or tablet, scan **QR-code-for-opening-on-a-phone.png** with the
-camera app to open the same demo. No installation or GitHub account is needed.
+## [Click here to open the REST demo](https://runesmedhaugen.github.io/sleephelp-app/)
+
+No installation or GitHub account is needed. The demo runs in your browser; it
+shows how REST works, but sounds are silent.
+
+### Opening it on a phone or tablet
+
+Open the camera app and scan the QR code below to open the same demo.
+
+![QR code for opening the REST demo on a phone or tablet](QR-code-for-opening-on-a-phone.png)
