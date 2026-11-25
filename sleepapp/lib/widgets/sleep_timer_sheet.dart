@@ -6,23 +6,14 @@ import '../models/wake_playback.dart';
 import 'sleep_plan_text.dart';
 
 const sleepTimerMinutes = [
-  1,
-  2,
-  5,
   15,
   30,
-  45,
   60,
-  90,
   120,
-  180,
-  240,
   360,
   480,
-  600,
-  720,
 ];
-const sleepFadeMinutes = [0, 1, 2, 5, 10, 15, 30, 60, 120];
+const sleepFadeMinutes = [0, 5, 10, 15, 30, 60, 120];
 
 class SleepTimerSheet extends StatefulWidget {
   const SleepTimerSheet({
@@ -143,6 +134,26 @@ class _SleepTimerSheetState extends State<SleepTimerSheet> {
                 ),
             ],
           ),
+          Slider(
+            value: _durationMinutes.toDouble(),
+            min: 1,
+            max: 720,
+            divisions: 719,
+            label: formatSleepDuration(
+              context,
+              Duration(minutes: _durationMinutes),
+            ),
+            onChanged: (value) => setState(() {
+              _durationMinutes = value.round();
+              _clampFade();
+            }),
+          ),
+          Center(
+            child: Text(
+              formatSleepDuration(context, Duration(minutes: _durationMinutes)),
+              style: TextStyle(color: style.text, fontSize: 16),
+            ),
+          ),
           const SizedBox(height: 23),
           _TimerLabel(context.t(L.fadeOver)),
           const SizedBox(height: 11),
@@ -164,6 +175,24 @@ class _SleepTimerSheetState extends State<SleepTimerSheet> {
                   onTap: () => setState(() => _fadeMinutes = minutes),
                 ),
             ],
+          ),
+          Slider(
+            value: _fadeMinutes.toDouble(),
+            min: 0,
+            max: _durationMinutes.toDouble(),
+            divisions: _durationMinutes,
+            label: _fadeMinutes == 0
+                ? context.t(L.noFade)
+                : formatSleepDuration(context, Duration(minutes: _fadeMinutes)),
+            onChanged: (value) => setState(() => _fadeMinutes = value.round()),
+          ),
+          Center(
+            child: Text(
+              _fadeMinutes == 0
+                  ? context.t(L.noFade)
+                  : formatSleepDuration(context, Duration(minutes: _fadeMinutes)),
+              style: TextStyle(color: style.text, fontSize: 16),
+            ),
           ),
           const SizedBox(height: 13),
           Container(
